@@ -23,6 +23,19 @@ impl Shell {
 
         while self.state.is_running {
             let cwd = env::current_dir()?;
+            let cwd_str = cwd.display().to_string();
+
+            // --- NEW: CUSTOM PROMPT LOGIC ---
+            // 1. Try to read the PROMPT environment variable. If it isn't set, use a cool default.
+            let raw_prompt = env::var("PROMPT").unwrap_or_else(|_| "⚗️ oxide $CWD > ".to_string());
+            
+            // 2. Swap out the $CWD placeholder for the actual current directory path
+            let prompt = raw_prompt.replace("$CWD", &cwd_str);
+
+            // --- NEW: Rustyline takes over reading input ---
+            let readline = rl.readline(&prompt);
+            
+            let cwd = env::current_dir()?;
             let prompt = format!("oxide {} > ", cwd.display());
 
             // --- NEW: Rustyline takes over reading input ---
@@ -140,7 +153,7 @@ impl Shell {
                             self.state.last_exit_code = oxide_builtins::cd::execute(&expanded_args);
                             continue;
                         }
-
+                        
                         let mut process = Command::new(&cmd.program);
                         process.args(&expanded_args);
 
