@@ -2,7 +2,7 @@ use crate::shell::Shell;
 use std::fs::File;
 use std::process::{Command, Stdio};
 use std::env;
-use std::io::{BufRead, BufReader}; // <-- NEW: For reading files
+use std::io::{BufRead, BufReader};
 
 use oxide_compat::CompatMode;
 use oxide_parser::lexer::Lexer;
@@ -17,7 +17,7 @@ impl Shell {
     // MODE 1: INTERACTIVE KEYBOARD (REPL)
     // ==========================================
     pub fn run_repl(&mut self) -> anyhow::Result<()> {
-        println!(" Oxide Shell Core v0.1.0");
+        println!("oxide Shell Core v0.1.0");
         let mut rl = DefaultEditor::new()?;
         let _ = rl.load_history("history.txt");
 
@@ -36,7 +36,7 @@ impl Shell {
                         self.state.is_running = false;
                         break;
                     }
-                    self.execute_line(trimmed); // <-- Calls the Engine!
+                    self.execute_line(trimmed); 
                 },
                 Err(ReadlineError::Interrupted) => { println!("^C"); continue; },
                 Err(ReadlineError::Eof) => { self.state.is_running = false; break; },
@@ -58,7 +58,6 @@ impl Shell {
             let line = line?;
             let trimmed = line.trim();
             
-            // Ignore empty lines and bash-style # comments
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }
@@ -66,7 +65,7 @@ impl Shell {
                 break;
             }
 
-            self.execute_line(trimmed); // <-- Calls the exact same Engine!
+            self.execute_line(trimmed);
         }
         Ok(())
     }
@@ -92,7 +91,7 @@ impl Shell {
 
         // --- 3. LEXER & PARSER ---
         let mut lexer = Lexer::new(&processed_input); 
-        let tokens = lexer.tokenize(); // <-- This uses the lexer (fixes the warnings!)
+        let tokens = lexer.tokenize(); 
 
         let mut parser = Parser::new(tokens);
         let executables = parser.parse();
@@ -145,7 +144,6 @@ impl Shell {
                         self.state.last_exit_code = oxide_builtins::pwd::execute(&expanded_args);
                         continue;
                     } else if cmd.program == "ls" || cmd.program == "dir" { 
-                        // Notice how BOTH "ls" and "dir" route to the exact same Rust function!
                         self.state.last_exit_code = oxide_builtins::ls::execute(&expanded_args);
                         continue;
                     } else if cmd.program == "kill" { 
@@ -186,9 +184,12 @@ impl Shell {
                         }
                     }
                 }
+
                 Statement::Pipeline(commands) => {
                     let mut previous_stdout = None;
                     let len = commands.len();
+
+                    let mut internal_data: Option<oxide_data::value::Value> = None;
 
                     for (i, cmd) in commands.iter().enumerate() {
                         let mut expanded_args = Vec::new();
@@ -204,60 +205,52 @@ impl Shell {
                         if cmd.program == "pwd" { 
                             self.state.last_exit_code = oxide_builtins::pwd::execute(&expanded_args);
                             continue;
-                        }
-
-                        else if cmd.program == "alias" {
+                        } else if cmd.program == "alias" {
                             self.state.last_exit_code = oxide_builtins::alias::execute(&cmd.args, &mut self.state.aliases);
                             continue;
-                        }
-
-                        else if cmd.program == "export" { 
+                        } else if cmd.program == "export" { 
                             self.state.last_exit_code = oxide_builtins::export::execute(&expanded_args); 
                             continue; 
-                        }
-
-                        else if cmd.program == "cd" { 
+                        } else if cmd.program == "cd" { 
                             self.state.last_exit_code = oxide_builtins::cd::execute(&expanded_args); 
                             continue; 
-                        }
-
-                        else if cmd.program == "echo" { 
+                        } else if cmd.program == "echo" { 
                             self.state.last_exit_code = oxide_builtins::echo::execute(&expanded_args); 
                             continue; 
-                        }
-
-                        else if cmd.program == "ls" || cmd.program == "dir" { 
-                        self.state.last_exit_code = oxide_builtins::ls::execute(&expanded_args);
-                        continue;
-                        }
-                        
-                        else if cmd.program == "kill" { 
+                        } else if cmd.program == "ls" || cmd.program == "dir" { 
+                            self.state.last_exit_code = oxide_builtins::ls::execute(&expanded_args);
+                            continue;
+                        } else if cmd.program == "kill" { 
                             self.state.last_exit_code = oxide_builtins::kill::execute(&expanded_args);
                             continue;
-                        } 
-                        
-                        else if cmd.program == "sleep" || cmd.program == "wait" {
+                        } else if cmd.program == "sleep" || cmd.program == "wait" {
                             self.state.last_exit_code = oxide_builtins::sleep::execute(&expanded_args);
                             continue;
-                        } 
-                        
-                        else if cmd.program == "rm" {
+                        } else if cmd.program == "rm" {
                             self.state.last_exit_code = oxide_builtins::rm::execute(&expanded_args);
                             continue;
-                        } 
-                        
-                        else if cmd.program == "ps" {
+                        } else if cmd.program == "ps" {
                             self.state.last_exit_code = oxide_builtins::ps::execute(&expanded_args);
                             continue;
-                        } 
-                        
-                        else if cmd.program == "top" {
+                        } else if cmd.program == "top" {
                             self.state.last_exit_code = oxide_builtins::top::execute(&expanded_args);
                             continue;
-                        }
-
-                        else if cmd.program == "open" {
-                            self.state.last_exit_code = oxide_builtins::open::execute(&expanded_args);
+                        } else if cmd.program == "open" {
+                            match oxide_builtins::open::get_data(&expanded_args[0]) {
+                                Ok(data) => {
+                                    internal_data = Some(data); 
+                                }
+                                Err(e) => {
+                                    eprintln!("oxide: open: pipeline error: {}", e);
+                                }
+                            }
+                            continue;
+                        } else if cmd.program == "get" {
+                            if let Some(data) = internal_data.take() {
+                                internal_data = Some(oxide_builtins::get::execute(&expanded_args, data));
+                            } else {
+                                eprintln!("oxide: get: no input data received in pipeline");
+                            }
                             continue;
                         }
 
@@ -285,6 +278,10 @@ impl Shell {
                                 break; 
                             }
                         }
+                    }
+
+                    if let Some(final_data) = internal_data {
+                        println!("{:#?}", final_data);
                     }
                 }
             }
