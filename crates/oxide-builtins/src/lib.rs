@@ -11,5 +11,9 @@ pub mod source;
 pub mod unset;
 pub mod ls;
 pub mod kill;
+pub mod sleep;
+pub mod rm;
+pub mod ps;
+pub mod top;
 
 // We will build a central Dispatcher here later!

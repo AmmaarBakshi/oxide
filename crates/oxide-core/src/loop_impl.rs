@@ -127,6 +127,18 @@ impl Shell {
                     } else if cmd.program == "kill" { 
                         self.state.last_exit_code = oxide_builtins::kill::execute(&expanded_args);
                         continue;
+                    } else if cmd.program == "sleep" || cmd.program == "wait" {
+                        self.state.last_exit_code = oxide_builtins::sleep::execute(&expanded_args);
+                        continue;
+                    } else if cmd.program == "rm" {
+                        self.state.last_exit_code = oxide_builtins::rm::execute(&expanded_args);
+                        continue;
+                    } else if cmd.program == "ps" {
+                        self.state.last_exit_code = oxide_builtins::ps::execute(&expanded_args);
+                        continue;
+                    } else if cmd.program == "top" {
+                        self.state.last_exit_code = oxide_builtins::top::execute(&expanded_args);
+                        continue;
                     }
                 
                     let mut process = Command::new(&cmd.program);
@@ -194,6 +206,26 @@ impl Shell {
                         
                         else if cmd.program == "kill" { 
                             self.state.last_exit_code = oxide_builtins::kill::execute(&expanded_args);
+                            continue;
+                        } 
+                        
+                        else if cmd.program == "sleep" || cmd.program == "wait" {
+                            self.state.last_exit_code = oxide_builtins::sleep::execute(&expanded_args);
+                            continue;
+                        } 
+                        
+                        else if cmd.program == "rm" {
+                            self.state.last_exit_code = oxide_builtins::rm::execute(&expanded_args);
+                            continue;
+                        } 
+                        
+                        else if cmd.program == "ps" {
+                            self.state.last_exit_code = oxide_builtins::ps::execute(&expanded_args);
+                            continue;
+                        } 
+                        
+                        else if cmd.program == "top" {
+                            self.state.last_exit_code = oxide_builtins::top::execute(&expanded_args);
                             continue;
                         }
 

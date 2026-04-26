@@ -4,4 +4,5 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+sysinfo = "0.38.4"
 # No extra dependencies needed just yet!
