@@ -16,14 +16,14 @@ impl Shell {
     // MODE 1: INTERACTIVE KEYBOARD (REPL)
     // ==========================================
     pub fn run_repl(&mut self) -> anyhow::Result<()> {
-        println!("⚗️ Oxide Shell Core v0.1.0");
+        println!(" Oxide Shell Core v0.1.0");
         let mut rl = DefaultEditor::new()?;
         let _ = rl.load_history("history.txt");
 
         while self.state.is_running {
             let cwd = env::current_dir()?;
             let cwd_str = cwd.display().to_string();
-            let raw_prompt = env::var("PROMPT").unwrap_or_else(|_| "⚗️ oxide $CWD > ".to_string());
+            let raw_prompt = env::var("PROMPT").unwrap_or_else(|_| "oxide $CWD > ".to_string());
             let prompt = raw_prompt.replace("$CWD", &cwd_str);
 
             match rl.readline(&prompt) {
@@ -106,18 +106,7 @@ impl Shell {
                     }
 
                     if cmd.program == "alias" {
-                        if cmd.args.is_empty() {
-                            for (key, val) in &self.state.aliases { println!("alias {}='{}'", key, val); }
-                            self.state.last_exit_code = 0;
-                        } else {
-                            for arg in &cmd.args {
-                                if let Some((key, value)) = arg.split_once('=') {
-                                    let clean_value = value.trim_matches(|c| c == '"' || c == '\'');
-                                    self.state.aliases.insert(key.to_string(), clean_value.to_string());
-                                }
-                            }
-                            self.state.last_exit_code = 0;
-                        }
+                        self.state.last_exit_code = oxide_builtins::alias::execute(&cmd.args, &mut self.state.aliases);
                         continue;
                     } else if cmd.program == "export" {
                         self.state.last_exit_code = oxide_builtins::export::execute(&expanded_args);
@@ -127,6 +116,9 @@ impl Shell {
                         continue;
                     } else if cmd.program == "cd" { 
                         self.state.last_exit_code = oxide_builtins::cd::execute(&expanded_args);
+                        continue;
+                    } else if cmd.program == "pwd" { 
+                        self.state.last_exit_code = oxide_builtins::pwd::execute(&expanded_args);
                         continue;
                     }
 
@@ -163,10 +155,30 @@ impl Shell {
                             }
                         }
 
-                        if cmd.program == "alias" { /* Handled in simple commands mostly, but good to have */ continue; }
-                        else if cmd.program == "export" { self.state.last_exit_code = oxide_builtins::export::execute(&expanded_args); continue; }
-                        else if cmd.program == "cd" { self.state.last_exit_code = oxide_builtins::cd::execute(&expanded_args); continue; }
-                        else if cmd.program == "echo" { self.state.last_exit_code = oxide_builtins::echo::execute(&expanded_args); continue; }
+                        if cmd.program == "pwd" { 
+                            self.state.last_exit_code = oxide_builtins::pwd::execute(&expanded_args);
+                            continue;
+                        }
+
+                        else if cmd.program == "alias" {
+                            self.state.last_exit_code = oxide_builtins::alias::execute(&cmd.args, &mut self.state.aliases);
+                            continue;
+                        }
+
+                        else if cmd.program == "export" { 
+                            self.state.last_exit_code = oxide_builtins::export::execute(&expanded_args); 
+                            continue; 
+                        }
+
+                        else if cmd.program == "cd" { 
+                            self.state.last_exit_code = oxide_builtins::cd::execute(&expanded_args); 
+                            continue; 
+                        }
+
+                        else if cmd.program == "echo" { 
+                            self.state.last_exit_code = oxide_builtins::echo::execute(&expanded_args); 
+                            continue; 
+                        }
 
                         let mut process = Command::new(&cmd.program);
                         process.args(&expanded_args);
