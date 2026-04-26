@@ -1,0 +1,7 @@
+[package]
+name = "oxide-builtins"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# No extra dependencies needed just yet!

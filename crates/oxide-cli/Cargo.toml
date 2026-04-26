@@ -1,0 +1,25 @@
+[package]
+name = "oxide-cli"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+oxide-core = { path = "../oxide-core" }
+oxide-config = { path = "../oxide-config" }
+oxide-ui = { path = "../oxide-ui" }
+anyhow.workspace = true  
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "startup"
+harness = false
+
+[[bench]]
+name = "pipelines"
+harness = false
+
+[[bench]]
+name = "completion"
+harness = false

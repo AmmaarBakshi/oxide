@@ -1,0 +1,6 @@
+[package]
+name = "oxide-utils"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

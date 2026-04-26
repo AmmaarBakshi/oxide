@@ -1,0 +1,6 @@
+[package]
+name = "oxide-compat"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

@@ -1,0 +1,6 @@
+[package]
+name = "oxide-ui"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
