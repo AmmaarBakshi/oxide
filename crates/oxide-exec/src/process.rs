@@ -47,3 +47,17 @@ pub fn spawn_piped(
 
     process.spawn().map_err(|_| format!("oxide: command not found: {}", program))
 }
+
+/// Spawns a process in the background (does NOT wait for it to finish)
+pub fn spawn_background(
+    program: &str, 
+    args: &[String], 
+    outfile: &Option<String>
+) -> Result<Child, String> {
+    let mut process = Command::new(program);
+    process.args(args);
+
+    redirect::apply(&mut process, outfile);
+
+    process.spawn().map_err(|e| format!("oxide: failed to spawn {}: {}", program, e))
+}

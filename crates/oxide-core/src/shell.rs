@@ -1,11 +1,14 @@
 use std::collections::HashMap;
 use oxide_compat::CompatMode; // <-- 1. Import it
+use oxide_exec::jobs::JobManager;
+
 
 pub struct ShellState {
     pub is_running: bool,
     pub last_exit_code: i32,
     pub aliases: HashMap<String, String>,
     pub mode: CompatMode, // <-- 2. Add the mode tracker
+    pub job_manager: JobManager, // <-- Add this field
 }
 
 impl ShellState {
@@ -15,6 +18,7 @@ impl ShellState {
             last_exit_code: 0,
             aliases: HashMap::new(),
             mode: CompatMode::Oxide, // <-- 3. Default to native Oxide
+            job_manager: JobManager::new(),
         }
     }
 }

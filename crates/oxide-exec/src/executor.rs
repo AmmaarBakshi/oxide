@@ -18,6 +18,7 @@ impl Executor {
         mode: &mut CompatMode,
         aliases: &mut HashMap<String, String>,
         last_exit_code: &mut i32,
+        job_manager: &mut crate::jobs::JobManager,
     ) {
         let compat_input = match *mode {
             CompatMode::Bash => oxide_compat::bash_mode::translate(input),
@@ -105,15 +106,37 @@ impl Executor {
                     } else if cmd.program == "echo" {
                         *last_exit_code = oxide_builtins::echo::execute(&expanded_args, &cmd.outfile);
                         continue;
+                    } else if cmd.program == "jobs" {
+                        job_manager.print_jobs();
+                        *last_exit_code = 0;
+                        continue;
                     }
                     // --- OS FALLBACK ---
-                    *last_exit_code = crate::process::spawn_single(
-                        &cmd.program, 
-                        &expanded_args, 
-                        &cmd.outfile
-                    );
-                } // <-- Closing brace of Statement::SimpleCommand
-
+                    // Check if the command is meant to run in the background
+                    let is_background = expanded_args.last().map(|s| s.as_str()) == Some("&");
+                    
+                    if is_background {
+                        expanded_args.pop(); // Remove the "&" from the arguments
+                        
+                        match crate::process::spawn_background(&cmd.program, &expanded_args, &cmd.outfile) {
+                            Ok(child) => {
+                                job_manager.add(cmd.program.clone(), child);
+                                *last_exit_code = 0;
+                            }
+                            Err(e) => {
+                                eprintln!("{}", e);
+                                *last_exit_code = 127;
+                            }
+                        }
+                    } else {
+                        // Standard foreground process
+                        *last_exit_code = crate::process::spawn_single(
+                            &cmd.program, 
+                            &expanded_args, 
+                            &cmd.outfile
+                        );
+                    }
+                }
                 Statement::Pipeline(commands) => {
                     let mut previous_stdout = None;
                     let len = commands.len();

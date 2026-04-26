@@ -68,17 +68,18 @@ impl Shell {
     // ==========================================
     // THE SHARED EXECUTION ENGINE
     // ==========================================
-    // ==========================================
-    // THE SHARED EXECUTION ENGINE
-    // ==========================================
     pub fn execute_line(&mut self, input: &str) {
+        // Clean up any background jobs that finished while we were typing
+        self.state.job_manager.check_completed(); 
+        
         let mut executor = oxide_exec::executor::Executor::new();
         
         executor.execute_line(
             input, 
             &mut self.state.mode, 
             &mut self.state.aliases, 
-            &mut self.state.last_exit_code
+            &mut self.state.last_exit_code,
+            &mut self.state.job_manager // <-- Pass it to the executor
         );
     }
 }
