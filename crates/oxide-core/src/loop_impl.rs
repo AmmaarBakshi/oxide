@@ -64,9 +64,21 @@ impl Shell {
             };
 
             // ==========================================
+            // --- NEW: THE PRE-PROCESSOR ---
+            // ==========================================
+            // Check if the very first word in the input matches an alias!
+            let mut processed_input = input.clone();
+            if let Some(first_word) = input.split_whitespace().next() {
+                if let Some(replacement) = self.state.aliases.get(first_word) {
+                    // Replace ONLY the first occurrence (the command itself)
+                    processed_input = input.replacen(first_word, replacement, 1);
+                }
+            }
+            
+            // ==========================================
             // YOUR EXISTING PARSER & EXECUTION ENGINE 
             // ==========================================
-            let mut lexer = Lexer::new(&input);
+            let mut lexer = Lexer::new(&processed_input);
             let tokens = lexer.tokenize();
 
             let mut parser = Parser::new(tokens);
@@ -96,8 +108,29 @@ impl Shell {
                                 expanded_args.push(arg.clone());
                             }
                         }
-
-                        if cmd.program == "export" {
+                        // --- CHECK BUILT-INS FIRST ---
+                        if cmd.program == "alias" {
+                            if cmd.args.is_empty() {
+                                // If they just type 'alias', list them all
+                                for (key, val) in &self.state.aliases {
+                                    println!("alias {}='{}'", key, val);
+                                }
+                                self.state.last_exit_code = 0;
+                            } else {
+                                // Save the new alias (e.g., alias ls="dir")
+                                for arg in &cmd.args {
+                                    if let Some((key, value)) = arg.split_once('=') {
+                                        // Strip quotes from the value if they added them
+                                        let clean_value = value.trim_matches(|c| c == '"' || c == '\'');
+                                        self.state.aliases.insert(key.to_string(), clean_value.to_string());
+                                    } else {
+                                        eprintln!("oxide: alias: invalid format. Use name=value");
+                                    }
+                                }
+                                self.state.last_exit_code = 0;
+                            }
+                            continue;
+                        } else if cmd.program == "export" {
                             self.state.last_exit_code = oxide_builtins::export::execute(&expanded_args);
                             continue;
                         } else if cmd.program == "echo" {
