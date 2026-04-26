@@ -7,7 +7,6 @@ pub struct Command {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Statement {
-    /// A basic command like `ls -al` or `echo "hello"`
     SimpleCommand(Command),
-    // Later we'll add things like Pipeline (cmd1 | cmd2)
+    Pipeline(Vec<Command>), 
 }

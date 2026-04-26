@@ -82,6 +82,53 @@ impl Shell {
                             }
                         }
                     }
+
+                    // --- NEW: EXECUTE A PIPELINE ---
+                    Statement::Pipeline(commands) => {
+                        let mut previous_stdout = None;
+                        let len = commands.len();
+
+                        for (i, cmd) in commands.iter().enumerate() {
+                            let mut process = Command::new(&cmd.program);
+                            process.args(&cmd.args);
+
+                            // --- PHASE 1: PLUMBING (BEFORE SPAWN) ---
+                            
+                            // 1. If there was a previous command, pipe its output into this command's input
+                            if let Some(stdout) = previous_stdout.take() {
+                                process.stdin(Stdio::from(stdout));
+                            }
+
+                            // 2. If this is NOT the last command, capture its output for the next one
+                            if i < len - 1 {
+                                process.stdout(Stdio::piped());
+                            } else if let Some(file_name) = &cmd.outfile {
+                                // 3. The last command might have redirection!
+                                if let Ok(file) = File::create(file_name) {
+                                    process.stdout(Stdio::from(file));
+                                }
+                            }
+
+                            // --- PHASE 2: EXECUTION (AFTER SPAWN) ---
+                            match process.spawn() {
+                                Ok(mut child) => {
+                                    if i < len - 1 {
+                                        // Save the stdout so the next iteration can use it
+                                        previous_stdout = child.stdout.take();
+                                    } else {
+                                        // Only wait for the VERY LAST command in the chain to finish
+                                        let status = child.wait()?;
+                                        self.state.last_exit_code = status.code().unwrap_or(1);
+                                    }
+                                }
+                                Err(_) => {
+                                    eprintln!("oxide: command not found: {}", cmd.program);
+                                    self.state.last_exit_code = 127;
+                                    break; // Stop the pipeline
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

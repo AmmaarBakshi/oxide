@@ -17,9 +17,9 @@ impl Parser {
     pub fn parse(&mut self) -> Vec<Statement> {
         let mut statements = Vec::new();
 
-        // Keep parsing commands until we run out of tokens
         while self.tokens.peek().is_some() {
-            if let Some(stmt) = self.parse_command() {
+            // Start looking for a pipeline instead of just a single command
+            if let Some(stmt) = self.parse_pipeline() {
                 statements.push(stmt);
             }
         }
@@ -27,15 +27,41 @@ impl Parser {
         statements
     }
 
-    fn parse_command(&mut self) -> Option<Statement> {
+    fn parse_pipeline(&mut self) -> Option<Statement> {
+        let mut commands = Vec::new();
+
+        while let Some(cmd) = self.parse_command() {
+            commands.push(cmd);
+
+            // If the next token is a pipe, consume it and loop again!
+            if let Some(token) = self.tokens.peek() {
+                if *token == Token::Pipe {
+                    self.tokens.next(); // Consume the '|'
+                    continue; 
+                }
+            }
+            break; // No pipe? End of the statement.
+        }
+
+        if commands.is_empty() {
+            None
+        } else if commands.len() == 1 {
+            Some(Statement::SimpleCommand(commands.remove(0)))
+        } else {
+            Some(Statement::Pipeline(commands))
+        }
+    }
+
+    // Notice this now returns Option<Command> instead of Option<Statement>
+    fn parse_command(&mut self) -> Option<Command> {
         let program: String;
         let mut args = Vec::new();
-        let mut outfile = None; // <-- Track the output file
+        let mut outfile = None;
 
         if let Some(token) = self.tokens.next() {
             match token {
                 Token::Word(w) | Token::StringLiteral(w) => program = w,
-                _ => return None, // If a command starts with '>', it's invalid
+                _ => return None,
             }
         } else {
             return None;
@@ -45,26 +71,27 @@ impl Parser {
             match token {
                 Token::Word(w) | Token::StringLiteral(w) => {
                     args.push(w.clone());
-                    self.tokens.next(); // Consume it
+                    self.tokens.next();
                 }
                 Token::RedirectOut => {
-                    self.tokens.next(); // Consume the '>'
-                    
-                    // The very next token MUST be the file name
+                    self.tokens.next();
                     if let Some(next_token) = self.tokens.next() {
                         match next_token {
                             Token::Word(file) | Token::StringLiteral(file) => {
                                 outfile = Some(file);
                             }
-                            _ => {} // Handle errors later
+                            _ => {} 
                         }
                     }
-                    break; // End the command after redirection
+                    break;
+                }
+                Token::Pipe => {
+                    break; // STOP looking for arguments if we hit a pipe!
                 }
             }
         }
 
-        Some(Statement::SimpleCommand(Command { program, args, outfile }))
+        Some(Command { program, args, outfile })
     }
 }
 

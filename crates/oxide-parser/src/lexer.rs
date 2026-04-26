@@ -19,18 +19,23 @@ impl<'a> Lexer<'a> {
 
         while let Some(&c) = self.input.peek() {
             match c {
-                // Ignore whitespace
+                
                 ' ' | '\t' | '\n' | '\r' => {
                     self.input.next();
                 }
-                // Handle double quotes
+                
                 '"' => tokens.push(self.lex_string()),
-                // --- NEW: Handle Redirection ---
+                
                 '>' => {
-                    self.input.next(); // Consume the '>'
+                    self.input.next();
                     tokens.push(Token::RedirectOut);
                 }
-                // Anything else is a regular word
+                
+                '|' => {
+                    self.input.next();
+                    tokens.push(Token::Pipe);
+                }
+                
                 _ => tokens.push(self.lex_word()),
             }
         }
@@ -42,10 +47,10 @@ impl<'a> Lexer<'a> {
         let mut word = String::new();
         while let Some(&c) = self.input.peek() {
             // Stop building the word if we hit a space or a quote
-            if c.is_whitespace() || c == '"' { // <-- Removed the * here
+            if c.is_whitespace() || c == '"' { 
                 break;
             }
-            word.push(c); // <-- Removed the * here
+            word.push(c); 
             self.input.next();
         }
         Token::Word(word)
