@@ -1,38 +1,73 @@
 use crate::shell::Shell;
-use std::io::{self, Write};
-use std::process::Command;
-use std::env; 
+use std::fs::File;
+use std::process::{Command, Stdio};
+use std::env;
 
 use oxide_parser::lexer::Lexer;
 use oxide_parser::parser::Parser;
 use oxide_parser::ast::Statement;
-use std::fs::File;            
-use std::process::Stdio;      
+
+// --- NEW: Rustyline Imports ---
+use rustyline::error::ReadlineError;
+use rustyline::DefaultEditor;
 
 impl Shell {
     pub fn run_repl(&mut self) -> anyhow::Result<()> {
         println!("⚗️ Oxide Shell Core v0.1.0");
 
+        // --- NEW: Initialize the Terminal Editor ---
+        let mut rl = DefaultEditor::new()?;
+        
+        // Try to load history from a file (it will silently fail if the file doesn't exist yet, which is fine!)
+        let _ = rl.load_history("history.txt");
+
         while self.state.is_running {
-            // --- NEW: DYNAMIC PROMPT ---
-            // Grab the current directory and display it
             let cwd = env::current_dir()?;
-            print!("oxide {} > ", cwd.display());
-            io::stdout().flush()?;
+            let prompt = format!("oxide {} > ", cwd.display());
 
-            let mut input = String::new();
-            io::stdin().read_line(&mut input)?;
+            // --- NEW: Rustyline takes over reading input ---
+            let readline = rl.readline(&prompt);
+            
+            let input = match readline {
+                Ok(line) => {
+                    let trimmed = line.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    
+                    // Save the command to our history so the UP arrow works!
+                    rl.add_history_entry(trimmed)?;
+                    
+                    if trimmed == "exit" {
+                        self.state.is_running = false;
+                        break; // Break out of the loop completely
+                    }
+                    
+                    // Return the trimmed string to be parsed
+                    trimmed.to_string()
+                },
+                Err(ReadlineError::Interrupted) => {
+                    // They pressed CTRL-C. Just give them a new prompt!
+                    println!("^C");
+                    continue;
+                },
+                Err(ReadlineError::Eof) => {
+                    // They pressed CTRL-D. This means "End of File" / Exit.
+                    println!("exit");
+                    self.state.is_running = false;
+                    break;
+                },
+                Err(err) => {
+                    println!("Error: {:?}", err);
+                    break;
+                }
+            };
 
-            let input = input.trim();
-            if input == "exit" {
-                self.state.is_running = false;
-                continue;
-            }
-            if input.is_empty() {
-                continue;
-            }
-
-            let mut lexer = Lexer::new(input);
+            // ==========================================
+            // YOUR EXISTING PARSER & EXECUTION ENGINE 
+            // (Keep this exactly the same!)
+            // ==========================================
+            let mut lexer = Lexer::new(&input); // <-- Note the '&' added here since input is now a String
             let tokens = lexer.tokenize();
 
             let mut parser = Parser::new(tokens);
@@ -159,7 +194,8 @@ impl Shell {
                 }
             }
         }
-
+        // --- NEW: Save history when shutting down ---
+        let _ = rl.save_history("history.txt");
         Ok(())
     }
 }

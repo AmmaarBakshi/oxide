@@ -7,4 +7,5 @@ edition.workspace = true
 anyhow.workspace = true
 oxide-parser = { path = "../oxide-parser" }
 oxide-builtins = { path = "../oxide-builtins" } # <-- Add this line
+rustyline = "18.0.0"
 
