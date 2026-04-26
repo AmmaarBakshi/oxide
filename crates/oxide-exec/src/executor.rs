@@ -1,5 +1,3 @@
-use std::fs::File;
-use std::process::{Command, Stdio};
 use std::collections::HashMap;
 
 use oxide_compat::CompatMode;
@@ -77,9 +75,6 @@ impl Executor {
                     } else if cmd.program == "export" {
                         *last_exit_code = oxide_builtins::export::execute(&expanded_args);
                         continue;
-                    } else if cmd.program == "echo" {
-                        *last_exit_code = oxide_builtins::echo::execute(&expanded_args);
-                        continue;
                     } else if cmd.program == "cd" {
                         *last_exit_code = oxide_builtins::cd::execute(&expanded_args);
                         continue;
@@ -107,26 +102,17 @@ impl Executor {
                     } else if cmd.program == "open" {
                         *last_exit_code = oxide_builtins::open::execute(&expanded_args);
                         continue;
+                    } else if cmd.program == "echo" {
+                        *last_exit_code = oxide_builtins::echo::execute(&expanded_args, &cmd.outfile);
+                        continue;
                     }
-
-                    let mut process = Command::new(&cmd.program);
-                    process.args(&expanded_args);
-
-                    if let Some(file_name) = &cmd.outfile {
-                        if let Ok(file) = File::create(file_name) { process.stdout(Stdio::from(file)); }
-                    }
-
-                    match process.spawn() {
-                        Ok(mut child) => {
-                            let status = child.wait().expect("failed to wait");
-                            *last_exit_code = status.code().unwrap_or(1);
-                        },
-                        Err(_) => {
-                            eprintln!("oxide: command not found: {}", cmd.program);
-                            *last_exit_code = 127;
-                        }
-                    }
-                }
+                    // --- OS FALLBACK ---
+                    *last_exit_code = crate::process::spawn_single(
+                        &cmd.program, 
+                        &expanded_args, 
+                        &cmd.outfile
+                    );
+                } // <-- Closing brace of Statement::SimpleCommand
 
                 Statement::Pipeline(commands) => {
                     let mut previous_stdout = None;
@@ -155,9 +141,6 @@ impl Executor {
                             continue;
                         } else if cmd.program == "cd" {
                             *last_exit_code = oxide_builtins::cd::execute(&expanded_args);
-                            continue;
-                        } else if cmd.program == "echo" {
-                            *last_exit_code = oxide_builtins::echo::execute(&expanded_args);
                             continue;
                         } else if cmd.program == "ls" || cmd.program == "dir" {
                             *last_exit_code = oxide_builtins::ls::execute(&expanded_args);
@@ -194,33 +177,35 @@ impl Executor {
                                 eprintln!("oxide: get: no input data received in pipeline");
                             }
                             continue;
+                        } else if cmd.program == "echo" {
+                            *last_exit_code = oxide_builtins::echo::execute(&expanded_args, &cmd.outfile);
+                            continue;
                         }
 
-                        let mut process = Command::new(&cmd.program);
-                        process.args(&expanded_args);
-
-                        if let Some(stdout) = previous_stdout.take() { process.stdin(Stdio::from(stdout)); }
-
-                        if i < len - 1 { process.stdout(Stdio::piped()); }
-                        else if let Some(file_name) = &cmd.outfile {
-                            if let Ok(file) = File::create(file_name) { process.stdout(Stdio::from(file)); }
-                        }
-
-                        match process.spawn() {
+                        // --- OS FALLBACK ---
+                        let is_last = i == len - 1;
+                        match crate::process::spawn_piped(
+                            &cmd.program, 
+                            &expanded_args, 
+                            previous_stdout.take(), 
+                            is_last, 
+                            &cmd.outfile
+                        ) {
                             Ok(mut child) => {
-                                if i < len - 1 { previous_stdout = child.stdout.take(); }
-                                else {
+                                if !is_last { 
+                                    previous_stdout = child.stdout.take(); 
+                                } else {
                                     let status = child.wait().expect("failed to wait");
                                     *last_exit_code = status.code().unwrap_or(1);
                                 }
                             }
-                            Err(_) => {
-                                eprintln!("oxide: command not found: {}", cmd.program);
+                            Err(err_msg) => {
+                                eprintln!("{}", err_msg);
                                 *last_exit_code = 127;
-                                break;
+                                break; 
                             }
                         }
-                    }
+                    } 
 
                     if let Some(final_data) = internal_data {
                         println!("{:#?}", final_data);
