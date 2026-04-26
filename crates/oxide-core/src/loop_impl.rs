@@ -4,6 +4,7 @@ use std::process::{Command, Stdio};
 use std::env;
 use std::io::{BufRead, BufReader}; // <-- NEW: For reading files
 
+use oxide_compat::CompatMode;
 use oxide_parser::lexer::Lexer;
 use oxide_parser::parser::Parser;
 use oxide_parser::ast::{Statement, Condition};
@@ -74,15 +75,25 @@ impl Shell {
     // THE SHARED EXECUTION ENGINE
     // ==========================================
     pub fn execute_line(&mut self, input: &str) {
-        let mut processed_input = input.to_string();
-        if let Some(first_word) = input.split_whitespace().next() {
+        // --- 1. COMPATIBILITY TRANSLATOR ---
+        let compat_input = match self.state.mode {
+            CompatMode::Bash => oxide_compat::bash_mode::translate(input),
+            CompatMode::Posix => oxide_compat::posix_mode::translate(input),
+            CompatMode::Oxide => input.to_string(),
+        };
+
+        // --- 2. ALIAS PRE-PROCESSOR ---
+        let mut processed_input = compat_input.clone();
+        if let Some(first_word) = compat_input.split_whitespace().next() {
             if let Some(replacement) = self.state.aliases.get(first_word) {
-                processed_input = input.replacen(first_word, replacement, 1);
+                processed_input = compat_input.replacen(first_word, replacement, 1);
             }
         }
 
-        let mut lexer = Lexer::new(&processed_input);
-        let tokens = lexer.tokenize();
+        // --- 3. LEXER & PARSER ---
+        let mut lexer = Lexer::new(&processed_input); 
+        let tokens = lexer.tokenize(); // <-- This uses the lexer (fixes the warnings!)
+
         let mut parser = Parser::new(tokens);
         let executables = parser.parse();
 
@@ -104,8 +115,21 @@ impl Shell {
                             expanded_args.push(arg.clone());
                         }
                     }
-
-                    if cmd.program == "alias" {
+                    
+                    if cmd.program == "mode" {
+                        if cmd.args.is_empty() {
+                            println!("oxide: current mode is {:?}", self.state.mode);
+                        } else {
+                            match cmd.args[0].as_str() {
+                                "bash" => self.state.mode = CompatMode::Bash,
+                                "posix" => self.state.mode = CompatMode::Posix,
+                                "oxide" => self.state.mode = CompatMode::Oxide,
+                                _ => eprintln!("oxide: unknown mode. Use bash, posix, or oxide"),
+                            }
+                        }
+                        self.state.last_exit_code = 0;
+                        continue;
+                    } else if cmd.program == "alias" {
                         self.state.last_exit_code = oxide_builtins::alias::execute(&cmd.args, &mut self.state.aliases);
                         continue;
                     } else if cmd.program == "export" {

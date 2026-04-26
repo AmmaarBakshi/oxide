@@ -1,10 +1,11 @@
 use std::collections::HashMap;
+use oxide_compat::CompatMode; // <-- 1. Import it
 
-// 1. The State struct lives on its own
 pub struct ShellState {
     pub is_running: bool,
     pub last_exit_code: i32,
     pub aliases: HashMap<String, String>,
+    pub mode: CompatMode, // <-- 2. Add the mode tracker
 }
 
 impl ShellState {
@@ -13,6 +14,7 @@ impl ShellState {
             is_running: true,
             last_exit_code: 0,
             aliases: HashMap::new(),
+            mode: CompatMode::Oxide, // <-- 3. Default to native Oxide
         }
     }
 }
