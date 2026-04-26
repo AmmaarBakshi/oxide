@@ -4,3 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+oxide-compat = { path = "../oxide-compat" }
+oxide-parser = { path = "../oxide-parser" }
+oxide-builtins = { path = "../oxide-builtins" }
+oxide-data = { path = "../oxide-data" }
