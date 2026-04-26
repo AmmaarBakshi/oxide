@@ -5,4 +5,4 @@ edition.workspace = true
 
 [dependencies]
 sysinfo = "0.38.4"
-# No extra dependencies needed just yet!
+oxide-data = { path = "../oxide-data" } # <-- ADD THIS LINE!

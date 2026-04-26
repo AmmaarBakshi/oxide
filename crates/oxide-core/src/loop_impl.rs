@@ -163,6 +163,9 @@ impl Shell {
                     } else if cmd.program == "top" {
                         self.state.last_exit_code = oxide_builtins::top::execute(&expanded_args);
                         continue;
+                    } else if cmd.program == "open" {
+                        self.state.last_exit_code = oxide_builtins::open::execute(&expanded_args);
+                        continue;
                     }
                 
                     let mut process = Command::new(&cmd.program);
@@ -250,6 +253,11 @@ impl Shell {
                         
                         else if cmd.program == "top" {
                             self.state.last_exit_code = oxide_builtins::top::execute(&expanded_args);
+                            continue;
+                        }
+
+                        else if cmd.program == "open" {
+                            self.state.last_exit_code = oxide_builtins::open::execute(&expanded_args);
                             continue;
                         }
 

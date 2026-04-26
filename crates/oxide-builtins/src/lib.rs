@@ -15,5 +15,6 @@ pub mod sleep;
 pub mod rm;
 pub mod ps;
 pub mod top;
+pub mod open;
 
 // We will build a central Dispatcher here later!
