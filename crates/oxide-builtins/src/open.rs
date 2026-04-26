@@ -1,5 +1,5 @@
 use std::fs;
-use oxide_data::json;
+use oxide_data::{json,csv};
 
 pub fn execute(args: &[String]) -> i32 {
     if args.is_empty() {
@@ -18,12 +18,11 @@ pub fn execute(args: &[String]) -> i32 {
         }
     };
 
-    // 2. Feed the text into your new Data Engine!
-    // We check if it ends in .json to know which parser to use
+    // ... [existing file reading code] ...
+
     if filename.ends_with(".json") {
         match json::parse(&contents) {
             Ok(value) => {
-                // {:#?} tells Rust to "pretty print" the Object tree!
                 println!("{:#?}", value);
                 0
             }
@@ -32,8 +31,20 @@ pub fn execute(args: &[String]) -> i32 {
                 1
             }
         }
+    // --- NEW: CSV ROUTING ---
+    } else if filename.ends_with(".csv") {
+        match csv::parse(&contents) {
+            Ok(table) => {
+                println!("{:#?}", table);
+                0
+            }
+            Err(e) => {
+                eprintln!("oxide: open: {}", e);
+                1
+            }
+        }
+    // ------------------------
     } else {
-        // If it's not a JSON file, just print the raw text for now
         println!("{}", contents);
         0
     }
