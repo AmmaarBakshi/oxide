@@ -30,10 +30,26 @@ impl<'a> Lexer<'a> {
                     self.input.next();
                     tokens.push(Token::RedirectOut);
                 }
-                
+
                 '|' => {
+                    self.input.next(); // Consume first character
+                    if let Some(&'|') = self.input.peek() {
+                        self.input.next(); // Consume second '|'
+                        tokens.push(Token::Or);
+                    } else {
+                        tokens.push(Token::Pipe);
+                    }
+                }
+  
+                '&' => {
                     self.input.next();
-                    tokens.push(Token::Pipe);
+                    if let Some(&'&') = self.input.peek() {
+                        self.input.next();
+                        tokens.push(Token::And);
+                    } else {
+                        // If it's just a single '&', treat it as a normal word for now
+                        tokens.push(Token::Word("&".to_string()));
+                    }
                 }
                 
                 _ => tokens.push(self.lex_word()),

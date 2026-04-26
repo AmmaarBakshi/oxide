@@ -5,7 +5,7 @@ use std::env;
 
 use oxide_parser::lexer::Lexer;
 use oxide_parser::parser::Parser;
-use oxide_parser::ast::Statement;
+use oxide_parser::ast::{Statement, Condition};
 
 // --- NEW: Rustyline Imports ---
 use rustyline::error::ReadlineError;
@@ -65,16 +65,23 @@ impl Shell {
 
             // ==========================================
             // YOUR EXISTING PARSER & EXECUTION ENGINE 
-            // (Keep this exactly the same!)
             // ==========================================
-            let mut lexer = Lexer::new(&input); // <-- Note the '&' added here since input is now a String
+            let mut lexer = Lexer::new(&input);
             let tokens = lexer.tokenize();
 
             let mut parser = Parser::new(tokens);
-            let statements = parser.parse();
+            let executables = parser.parse(); // <-- 1. This is 'executables' now!
 
-            for stmt in statements {
-                match stmt {
+            for exec in executables { // <-- 2. Looping over 'exec' in 'executables'
+                
+                // --- NEW: CONTROL FLOW LOGIC ---
+                match exec.condition {
+                    Condition::And if self.state.last_exit_code != 0 => continue, // Skip if previous failed
+                    Condition::Or if self.state.last_exit_code == 0 => continue,  // Skip if previous succeeded
+                    _ => {} // Otherwise, proceed!
+                }
+
+                match exec.statement { // <-- 3. Matching on exec.statement
                     // ==========================================
                     // ARM 1: SINGLE COMMANDS (No Pipes)
                     // ==========================================
@@ -194,6 +201,7 @@ impl Shell {
                 }
             }
         }
+
         // --- NEW: Save history when shutting down ---
         let _ = rl.save_history("history.txt");
         Ok(())

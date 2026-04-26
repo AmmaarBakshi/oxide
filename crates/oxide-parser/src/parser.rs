@@ -1,4 +1,4 @@
-use crate::ast::{Command, Statement};
+use crate::ast::{Command, Statement, Condition, Executable}; 
 use crate::token::Token;
 use std::iter::Peekable;
 use std::vec::IntoIter;
@@ -14,17 +14,37 @@ impl Parser {
         }
     }
 
-    pub fn parse(&mut self) -> Vec<Statement> {
-        let mut statements = Vec::new();
+    pub fn parse(&mut self) -> Vec<Executable> {
+        let mut executables = Vec::new();
+        let mut next_condition = Condition::Always;
 
         while self.tokens.peek().is_some() {
-            // Start looking for a pipeline instead of just a single command
             if let Some(stmt) = self.parse_pipeline() {
-                statements.push(stmt);
+                executables.push(Executable {
+                    statement: stmt,
+                    condition: next_condition.clone(),
+                });
+            }
+
+            // Check what operator links this command to the next one
+            if let Some(token) = self.tokens.peek() {
+                match token {
+                    Token::And => {
+                        next_condition = Condition::And;
+                        self.tokens.next(); // Consume '&&'
+                    }
+                    Token::Or => {
+                        next_condition = Condition::Or;
+                        self.tokens.next(); // Consume '||'
+                    }
+                    _ => break, // Unrecognized separator, stop parsing
+                }
+            } else {
+                break;
             }
         }
 
-        statements
+        executables
     }
 
     fn parse_pipeline(&mut self) -> Option<Statement> {
@@ -85,8 +105,8 @@ impl Parser {
                     }
                     break;
                 }
-                Token::Pipe => {
-                    break; // STOP looking for arguments if we hit a pipe!
+                Token::Pipe | Token::And | Token::Or => { // <-- UPDATE THIS LINE
+                    break; // STOP looking for arguments if we hit a control operator!
                 }
             }
         }

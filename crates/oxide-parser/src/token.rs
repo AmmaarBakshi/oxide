@@ -3,5 +3,7 @@ pub enum Token {
     Word(String),
     StringLiteral(String),
     RedirectOut,
-    Pipe, // <-- NEW: Represents the '|' symbol
+    Pipe, 
+    And,
+    Or,
 }
