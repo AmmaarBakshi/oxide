@@ -40,27 +40,38 @@ impl Shell {
 
             for stmt in statements {
                 match stmt {
+                    // ==========================================
+                    // ARM 1: SINGLE COMMANDS (No Pipes)
+                    // ==========================================
                     Statement::SimpleCommand(cmd) => {
-                        
-                        // --- CHECK FOR BUILT-INS ---
-                        if cmd.program == "echo" {
-                            self.state.last_exit_code = oxide_builtins::echo::execute(&cmd.args);
+                        let mut expanded_args = Vec::new();
+                        for arg in &cmd.args {
+                            if arg.starts_with('$') {
+                                let var_name = &arg[1..];
+                                let val = std::env::var(var_name).unwrap_or_default();
+                                expanded_args.push(val);
+                            } else {
+                                expanded_args.push(arg.clone());
+                            }
+                        }
+
+                        if cmd.program == "export" {
+                            self.state.last_exit_code = oxide_builtins::export::execute(&expanded_args);
                             continue;
-                        } else if cmd.program == "cd" { // <-- NEW CD INTERCEPT
-                            self.state.last_exit_code = oxide_builtins::cd::execute(&cmd.args);
+                        } else if cmd.program == "echo" {
+                            self.state.last_exit_code = oxide_builtins::echo::execute(&expanded_args);
+                            continue;
+                        } else if cmd.program == "cd" { 
+                            self.state.last_exit_code = oxide_builtins::cd::execute(&expanded_args);
                             continue;
                         }
 
-                        // --- SPAWN SYSTEM PROCESS ---
                         let mut process = Command::new(&cmd.program);
-                        process.args(&cmd.args);
+                        process.args(&expanded_args);
 
-                        // --- NEW: HANDLE REDIRECTION ---
                         if let Some(file_name) = &cmd.outfile {
-                            // Try to create/open the file
                             match File::create(file_name) {
                                 Ok(file) => {
-                                    // Tell the process to send standard output to this file
                                     process.stdout(Stdio::from(file));
                                 }
                                 Err(e) => {
@@ -83,40 +94,56 @@ impl Shell {
                         }
                     }
 
-                    // --- NEW: EXECUTE A PIPELINE ---
+                    // ==========================================
+                    // ARM 2: PIPELINES (A | B | C)
+                    // ==========================================
                     Statement::Pipeline(commands) => {
                         let mut previous_stdout = None;
                         let len = commands.len();
 
                         for (i, cmd) in commands.iter().enumerate() {
-                            let mut process = Command::new(&cmd.program);
-                            process.args(&cmd.args);
+                            let mut expanded_args = Vec::new();
+                            for arg in &cmd.args {
+                                if arg.starts_with('$') {
+                                    let var_name = &arg[1..];
+                                    let val = std::env::var(var_name).unwrap_or_default();
+                                    expanded_args.push(val);
+                                } else {
+                                    expanded_args.push(arg.clone());
+                                }
+                            }
 
-                            // --- PHASE 1: PLUMBING (BEFORE SPAWN) ---
-                            
-                            // 1. If there was a previous command, pipe its output into this command's input
+                            if cmd.program == "export" {
+                                self.state.last_exit_code = oxide_builtins::export::execute(&expanded_args);
+                                continue;
+                            } else if cmd.program == "cd" {
+                                self.state.last_exit_code = oxide_builtins::cd::execute(&expanded_args);
+                                continue;
+                            } else if cmd.program == "echo" {
+                                self.state.last_exit_code = oxide_builtins::echo::execute(&expanded_args);
+                                continue;
+                            }
+
+                            let mut process = Command::new(&cmd.program);
+                            process.args(&expanded_args);
+
                             if let Some(stdout) = previous_stdout.take() {
                                 process.stdin(Stdio::from(stdout));
                             }
 
-                            // 2. If this is NOT the last command, capture its output for the next one
                             if i < len - 1 {
                                 process.stdout(Stdio::piped());
                             } else if let Some(file_name) = &cmd.outfile {
-                                // 3. The last command might have redirection!
                                 if let Ok(file) = File::create(file_name) {
                                     process.stdout(Stdio::from(file));
                                 }
                             }
 
-                            // --- PHASE 2: EXECUTION (AFTER SPAWN) ---
                             match process.spawn() {
                                 Ok(mut child) => {
                                     if i < len - 1 {
-                                        // Save the stdout so the next iteration can use it
                                         previous_stdout = child.stdout.take();
                                     } else {
-                                        // Only wait for the VERY LAST command in the chain to finish
                                         let status = child.wait()?;
                                         self.state.last_exit_code = status.code().unwrap_or(1);
                                     }
@@ -124,7 +151,7 @@ impl Shell {
                                 Err(_) => {
                                     eprintln!("oxide: command not found: {}", cmd.program);
                                     self.state.last_exit_code = 127;
-                                    break; // Stop the pipeline
+                                    break; 
                                 }
                             }
                         }
