@@ -25,7 +25,7 @@ Ensure you have the Rust toolchain installed (and MSVC build tools if on Windows
 
 ```bash
 # Clone the repo
-git clone [https://github.com/AmmaarBakshi/oxide.git](https://github.com/AmmaarBakshi/oxide.git)
+git clone https://github.com/AmmaarBakshi/oxide.git (https://github.com/AmmaarBakshi/oxide.git)
 cd oxide
 
 # Build and run the shell
