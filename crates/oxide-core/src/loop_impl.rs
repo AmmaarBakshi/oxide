@@ -120,8 +120,15 @@ impl Shell {
                     } else if cmd.program == "pwd" { 
                         self.state.last_exit_code = oxide_builtins::pwd::execute(&expanded_args);
                         continue;
+                    } else if cmd.program == "ls" || cmd.program == "dir" { 
+                        // Notice how BOTH "ls" and "dir" route to the exact same Rust function!
+                        self.state.last_exit_code = oxide_builtins::ls::execute(&expanded_args);
+                        continue;
+                    } else if cmd.program == "kill" { 
+                        self.state.last_exit_code = oxide_builtins::kill::execute(&expanded_args);
+                        continue;
                     }
-
+                
                     let mut process = Command::new(&cmd.program);
                     process.args(&expanded_args);
 
@@ -178,6 +185,16 @@ impl Shell {
                         else if cmd.program == "echo" { 
                             self.state.last_exit_code = oxide_builtins::echo::execute(&expanded_args); 
                             continue; 
+                        }
+
+                        else if cmd.program == "ls" || cmd.program == "dir" { 
+                        self.state.last_exit_code = oxide_builtins::ls::execute(&expanded_args);
+                        continue;
+                        }
+                        
+                        else if cmd.program == "kill" { 
+                            self.state.last_exit_code = oxide_builtins::kill::execute(&expanded_args);
+                            continue;
                         }
 
                         let mut process = Command::new(&cmd.program);
