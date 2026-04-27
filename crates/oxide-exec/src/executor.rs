@@ -110,6 +110,9 @@ impl Executor {
                         job_manager.print_jobs();
                         *last_exit_code = 0;
                         continue;
+                    } else if cmd.program == "clear" {
+                        *last_exit_code = oxide_builtins::clear::execute(&expanded_args);
+                        continue;
                     }
                     // --- OS FALLBACK ---
                     // Check if the command is meant to run in the background
@@ -203,8 +206,14 @@ impl Executor {
                         } else if cmd.program == "echo" {
                             *last_exit_code = oxide_builtins::echo::execute(&expanded_args, &cmd.outfile);
                             continue;
+                        } else if cmd.program == "clear" {
+                            *last_exit_code = oxide_builtins::clear::execute(&expanded_args);
+                            continue;
+                        } else if cmd.program == "jobs" {
+                            job_manager.print_jobs();
+                            *last_exit_code = 0;
+                            continue;
                         }
-
                         // --- OS FALLBACK ---
                         let is_last = i == len - 1;
                         match crate::process::spawn_piped(

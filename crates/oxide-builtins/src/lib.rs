@@ -17,3 +17,4 @@ pub mod ps;
 pub mod top;
 pub mod open;
 pub mod get;
+pub mod clear;
