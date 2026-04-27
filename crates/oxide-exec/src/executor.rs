@@ -113,7 +113,11 @@ impl Executor {
                     } else if cmd.program == "clear" {
                         *last_exit_code = oxide_builtins::clear::execute(&expanded_args);
                         continue;
+                    } else if cmd.program == "find" {
+                        *last_exit_code = oxide_builtins::find::execute(&expanded_args);
+                        continue;
                     }
+
                     // --- OS FALLBACK ---
                     // Check if the command is meant to run in the background
                     let is_background = expanded_args.last().map(|s| s.as_str()) == Some("&");
@@ -212,6 +216,9 @@ impl Executor {
                         } else if cmd.program == "jobs" {
                             job_manager.print_jobs();
                             *last_exit_code = 0;
+                            continue;
+                        } else if cmd.program == "find" {
+                            *last_exit_code = oxide_builtins::find::execute(&expanded_args);
                             continue;
                         }
                         // --- OS FALLBACK ---
