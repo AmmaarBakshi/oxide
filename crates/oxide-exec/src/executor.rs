@@ -33,6 +33,17 @@ impl Executor {
             }
         }
 
+        // --- NEW: SUBSHELL INTERCEPTOR ---
+        let trimmed = processed_input.trim();
+        if trimmed.starts_with('(') && trimmed.ends_with(')') {
+            // Strip off the ( and )
+            let inner_cmd = &trimmed[1..trimmed.len() - 1];
+            
+            // Route it to the sandbox!
+            *last_exit_code = crate::subshell::execute(inner_cmd, mode, aliases, job_manager);
+            return; // Stop here! The subshell handles the rest.
+        }
+
         let mut lexer = Lexer::new(&processed_input);
         let tokens = lexer.tokenize();
         let mut parser = Parser::new(tokens);
