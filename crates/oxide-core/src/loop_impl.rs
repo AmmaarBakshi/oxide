@@ -1,10 +1,15 @@
 use crate::shell::Shell;
 use std::fs::File;
 use std::env;
-use std::io::{BufRead, BufReader}; // <-- Brought Write back!
+use std::io::{BufRead, BufReader};
 
 use rustyline::error::ReadlineError;
-use rustyline::DefaultEditor;
+use rustyline::Editor; // Changed from DefaultEditor
+use rustyline::history::DefaultHistory; // Needed for the new Editor type
+
+// Import our new auto-completer!
+use crate::completion::OxideHelper;
+use rustyline::completion::FilenameCompleter;
 
 impl Shell {
     // ==========================================
@@ -12,12 +17,21 @@ impl Shell {
     // ==========================================
     pub fn run_repl(&mut self) -> anyhow::Result<()> {
         
+        // 1. Turn on the Signal Shield!
         oxide_exec::signals::init();
+
+        // 2. Create the Editor with our custom OxideHelper attached!
+        let mut rl: Editor<OxideHelper, DefaultHistory> = Editor::new()?;
         
-        let mut rl = DefaultEditor::new()?;
+        let helper = OxideHelper {
+            completer: FilenameCompleter::new(),
+        };
+        rl.set_helper(Some(helper));
+
         let _ = rl.load_history("history.txt");
 
         while self.state.is_running {
+            // ... [The rest of your loop stays exactly the same!]
             let cwd = env::current_dir()?;
             let cwd_str = cwd.display().to_string();
 

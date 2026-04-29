@@ -10,7 +10,9 @@ oxide-ui = { path = "../oxide-ui" }
 anyhow.workspace = true  
 
 [dev-dependencies]
-criterion = "0.5"
+criterion = "0.5.1"
+oxide-compat = { path = "../oxide-compat" }
+oxide-exec = { path = "../oxide-exec" }
 
 [[bench]]
 name = "startup"
@@ -20,6 +22,4 @@ harness = false
 name = "pipelines"
 harness = false
 
-[[bench]]
-name = "completion"
-harness = false
+
