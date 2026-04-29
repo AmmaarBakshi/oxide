@@ -1,7 +1,7 @@
 use crate::shell::Shell;
 use std::fs::File;
 use std::env;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader}; // <-- Brought Write back!
 
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
@@ -11,7 +11,6 @@ impl Shell {
     // MODE 1: INTERACTIVE KEYBOARD (REPL)
     // ==========================================
     pub fn run_repl(&mut self) -> anyhow::Result<()> {
-        println!("⚗️ Oxide Shell Core v0.1.0");
         
         let mut rl = DefaultEditor::new()?;
         let _ = rl.load_history("history.txt");
@@ -20,9 +19,10 @@ impl Shell {
             let cwd = env::current_dir()?;
             let cwd_str = cwd.display().to_string();
 
-            let raw_prompt = env::var("PROMPT").unwrap_or_else(|_| "oxide $CWD > ".to_string());
-            let prompt = raw_prompt.replace("$CWD", &cwd_str);
+            // 1. Build a clean, plain-text prompt
+            let prompt = format!("oxide {} > ", cwd_str);
 
+            // 2. Hand it directly to rustyline. No truecolor, no flush()!
             match rl.readline(&prompt) {
                 Ok(line) => {
                     let trimmed = line.trim();
@@ -80,7 +80,7 @@ impl Shell {
             &mut self.state.mode, 
             &mut self.state.aliases, 
             &mut self.state.last_exit_code,
-            &mut self.state.job_manager // <-- Pass it to the executor
+            &mut self.state.job_manager
         );
     }
 }

@@ -145,106 +145,66 @@ impl Executor {
                     }
                 }
                 Statement::Pipeline(commands) => {
-                    let mut previous_stdout = None;
+                    let mut os_pipeline = crate::pipeline::OsPipeline::new(); // <-- NEW MANAGER
                     let len = commands.len();
                     let mut internal_data: Option<oxide_data::value::Value> = None;
 
                     for (i, cmd) in commands.iter().enumerate() {
-                        let mut expanded_args = Vec::new();
-                        for arg in &cmd.args {
-                            if arg.starts_with('$') {
-                                let val = std::env::var(&arg[1..]).unwrap_or_default();
-                                expanded_args.push(val);
-                            } else {
-                                expanded_args.push(arg.clone());
-                            }
-                        }
+                        // Clean 1-line variable expansion
+                        let expanded_args: Vec<String> = cmd.args.iter().map(|arg| {
+                            if arg.starts_with('$') { std::env::var(&arg[1..]).unwrap_or_default() } 
+                            else { arg.clone() }
+                        }).collect();
 
-                        if cmd.program == "pwd" {
-                            *last_exit_code = oxide_builtins::pwd::execute(&expanded_args);
-                            continue;
-                        } else if cmd.program == "alias" {
-                            *last_exit_code = oxide_builtins::alias::execute(&cmd.args, aliases);
-                            continue;
-                        } else if cmd.program == "export" {
-                            *last_exit_code = oxide_builtins::export::execute(&expanded_args);
-                            continue;
-                        } else if cmd.program == "cd" {
-                            *last_exit_code = oxide_builtins::cd::execute(&expanded_args);
-                            continue;
-                        } else if cmd.program == "ls" || cmd.program == "dir" {
-                            *last_exit_code = oxide_builtins::ls::execute(&expanded_args);
-                            continue;
-                        } else if cmd.program == "kill" {
-                            *last_exit_code = oxide_builtins::kill::execute(&expanded_args);
-                            continue;
-                        } else if cmd.program == "sleep" || cmd.program == "wait" {
-                            *last_exit_code = oxide_builtins::sleep::execute(&expanded_args);
-                            continue;
-                        } else if cmd.program == "rm" {
-                            *last_exit_code = oxide_builtins::rm::execute(&expanded_args);
-                            continue;
-                        } else if cmd.program == "ps" {
-                            *last_exit_code = oxide_builtins::ps::execute(&expanded_args);
-                            continue;
-                        } else if cmd.program == "top" {
-                            *last_exit_code = oxide_builtins::top::execute(&expanded_args);
-                            continue;
-                        } else if cmd.program == "open" {
-                            match oxide_builtins::open::get_data(&expanded_args[0]) {
-                                Ok(data) => {
-                                    internal_data = Some(data);
-                                }
-                                Err(e) => {
-                                    eprintln!("oxide: open: pipeline error: {}", e);
+                        // Clean Match Routing!
+                        match cmd.program.as_str() {
+                            "pwd" => *last_exit_code = oxide_builtins::pwd::execute(&expanded_args),
+                            "alias" => *last_exit_code = oxide_builtins::alias::execute(&cmd.args, aliases),
+                            "export" => *last_exit_code = oxide_builtins::export::execute(&expanded_args),
+                            "cd" => *last_exit_code = oxide_builtins::cd::execute(&expanded_args),
+                            "ls" | "dir" => *last_exit_code = oxide_builtins::ls::execute(&expanded_args),
+                            "kill" => *last_exit_code = oxide_builtins::kill::execute(&expanded_args),
+                            "sleep" | "wait" => *last_exit_code = oxide_builtins::sleep::execute(&expanded_args),
+                            "rm" => *last_exit_code = oxide_builtins::rm::execute(&expanded_args),
+                            "ps" => *last_exit_code = oxide_builtins::ps::execute(&expanded_args),
+                            "top" => *last_exit_code = oxide_builtins::top::execute(&expanded_args),
+                            "echo" => *last_exit_code = oxide_builtins::echo::execute(&expanded_args, &cmd.outfile),
+                            "clear" => *last_exit_code = oxide_builtins::clear::execute(&expanded_args),
+                            "jobs" => { job_manager.print_jobs(); *last_exit_code = 0; },
+                            "find" => *last_exit_code = oxide_builtins::find::execute(&expanded_args),
+                            
+                            // Pipeline-specific data commands
+                            "open" => {
+                                match oxide_builtins::open::get_data(&expanded_args[0]) {
+                                    Ok(data) => internal_data = Some(data),
+                                    Err(e) => eprintln!("oxide: open: pipeline error: {}", e),
                                 }
                             }
-                            continue;
-                        } else if cmd.program == "get" {
-                            if let Some(data) = internal_data.take() {
-                                internal_data = Some(oxide_builtins::get::execute(&expanded_args, data));
-                            } else {
-                                eprintln!("oxide: get: no input data received in pipeline");
-                            }
-                            continue;
-                        } else if cmd.program == "echo" {
-                            *last_exit_code = oxide_builtins::echo::execute(&expanded_args, &cmd.outfile);
-                            continue;
-                        } else if cmd.program == "clear" {
-                            *last_exit_code = oxide_builtins::clear::execute(&expanded_args);
-                            continue;
-                        } else if cmd.program == "jobs" {
-                            job_manager.print_jobs();
-                            *last_exit_code = 0;
-                            continue;
-                        } else if cmd.program == "find" {
-                            *last_exit_code = oxide_builtins::find::execute(&expanded_args);
-                            continue;
-                        }
-                        // --- OS FALLBACK ---
-                        let is_last = i == len - 1;
-                        match crate::process::spawn_piped(
-                            &cmd.program, 
-                            &expanded_args, 
-                            previous_stdout.take(), 
-                            is_last, 
-                            &cmd.outfile
-                        ) {
-                            Ok(mut child) => {
-                                if !is_last { 
-                                    previous_stdout = child.stdout.take(); 
+                            "get" => {
+                                if let Some(data) = internal_data.take() {
+                                    internal_data = Some(oxide_builtins::get::execute(&expanded_args, data));
                                 } else {
-                                    let status = child.wait().expect("failed to wait");
-                                    *last_exit_code = status.code().unwrap_or(1);
+                                    eprintln!("oxide: get: no input data received in pipeline");
                                 }
                             }
-                            Err(err_msg) => {
-                                eprintln!("{}", err_msg);
-                                *last_exit_code = 127;
-                                break; 
+
+                            // OS Fallback Pipeline
+                            _ => {
+                                let is_last = i == len - 1;
+                                
+                                // Feed the command into our pipeline manager
+                                match os_pipeline.execute_node(&cmd.program, &expanded_args, is_last, &cmd.outfile) {
+                                    Ok(Some(code)) => *last_exit_code = code, // The pipeline finished!
+                                    Ok(None) => {} // Still running, keep looping!
+                                    Err(e) => {
+                                        eprintln!("{}", e);
+                                        *last_exit_code = 127;
+                                        break; 
+                                    }
+                                }
                             }
                         }
-                    } 
+                    }
 
                     if let Some(final_data) = internal_data {
                         println!("{:#?}", final_data);
