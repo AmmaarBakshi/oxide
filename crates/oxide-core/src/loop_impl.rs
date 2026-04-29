@@ -12,6 +12,8 @@ impl Shell {
     // ==========================================
     pub fn run_repl(&mut self) -> anyhow::Result<()> {
         
+        oxide_exec::signals::init();
+        
         let mut rl = DefaultEditor::new()?;
         let _ = rl.load_history("history.txt");
 

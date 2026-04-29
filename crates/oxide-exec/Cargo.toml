@@ -8,3 +8,4 @@ oxide-compat = { path = "../oxide-compat" }
 oxide-parser = { path = "../oxide-parser" }
 oxide-builtins = { path = "../oxide-builtins" }
 oxide-data = { path = "../oxide-data" }
+ctrlc = "3.5.2"
