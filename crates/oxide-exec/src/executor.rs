@@ -33,7 +33,7 @@ impl Executor {
             }
         }
 
-        // --- NEW: SUBSHELL INTERCEPTOR ---
+        // --- SUBSHELL INTERCEPTOR ---
         let trimmed = processed_input.trim();
         if trimmed.starts_with('(') && trimmed.ends_with(')') {
             // Strip off the ( and )
@@ -58,15 +58,13 @@ impl Executor {
 
             match exec.statement {
                 Statement::SimpleCommand(cmd) => {
-                    let mut expanded_args = Vec::new();
+                    // --- NEW PRE-PROCESSOR PIPELINE ---
+                    let mut expanded_args: Vec<String> = Vec::new();
                     for arg in &cmd.args {
-                        if arg.starts_with('$') {
-                            let val = std::env::var(&arg[1..]).unwrap_or_default();
-                            expanded_args.push(val);
-                        } else {
-                            expanded_args.push(arg.clone());
-                        }
+                        let text_expanded = oxide_parser::expand::expand_text(arg);
+                        expanded_args.extend(oxide_parser::glob::expand_glob(&text_expanded));
                     }
+                    // ----------------------------------
 
                     if cmd.program == "mode" {
                         if cmd.args.is_empty() {
@@ -115,7 +113,10 @@ impl Executor {
                         *last_exit_code = oxide_builtins::open::execute(&expanded_args);
                         continue;
                     } else if cmd.program == "echo" {
-                        *last_exit_code = oxide_builtins::echo::execute(&expanded_args, &cmd.outfile);
+                        // Echo now uses the safely expanded arguments!
+                        let output = expanded_args.join(" "); 
+                        println!("{}", output);
+                        *last_exit_code = 0;
                         continue;
                     } else if cmd.program == "jobs" {
                         job_manager.print_jobs();
@@ -156,16 +157,18 @@ impl Executor {
                     }
                 }
                 Statement::Pipeline(commands) => {
-                    let mut os_pipeline = crate::pipeline::OsPipeline::new(); // <-- NEW MANAGER
+                    let mut os_pipeline = crate::pipeline::OsPipeline::new();
                     let len = commands.len();
                     let mut internal_data: Option<oxide_data::value::Value> = None;
 
                     for (i, cmd) in commands.iter().enumerate() {
-                        // Clean 1-line variable expansion
-                        let expanded_args: Vec<String> = cmd.args.iter().map(|arg| {
-                            if arg.starts_with('$') { std::env::var(&arg[1..]).unwrap_or_default() } 
-                            else { arg.clone() }
-                        }).collect();
+                        // --- NEW PRE-PROCESSOR PIPELINE ---
+                        let mut expanded_args: Vec<String> = Vec::new();
+                        for arg in &cmd.args {
+                            let text_expanded = oxide_parser::expand::expand_text(arg);
+                            expanded_args.extend(oxide_parser::glob::expand_glob(&text_expanded));
+                        }
+                        // ----------------------------------
 
                         // Clean Match Routing!
                         match cmd.program.as_str() {
@@ -179,7 +182,11 @@ impl Executor {
                             "rm" => *last_exit_code = oxide_builtins::rm::execute(&expanded_args),
                             "ps" => *last_exit_code = oxide_builtins::ps::execute(&expanded_args),
                             "top" => *last_exit_code = oxide_builtins::top::execute(&expanded_args),
-                            "echo" => *last_exit_code = oxide_builtins::echo::execute(&expanded_args, &cmd.outfile),
+                            "echo" => {
+                                    let output = expanded_args.join(" "); 
+                                    println!("{}", output);
+                                    *last_exit_code = 0;
+                                }
                             "clear" => *last_exit_code = oxide_builtins::clear::execute(&expanded_args),
                             "jobs" => { job_manager.print_jobs(); *last_exit_code = 0; },
                             "find" => *last_exit_code = oxide_builtins::find::execute(&expanded_args),
