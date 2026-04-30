@@ -1,8 +1,8 @@
 #[derive(Debug, PartialEq, Clone)]
 pub enum Condition {
-    Always, // Normal execution
-    And,    // Only run if the previous command SUCCEEDED
-    Or,     // Only run if the previous command FAILED
+    Always,
+    And,   
+    Or,    
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -22,4 +22,15 @@ pub struct Command {
 pub enum Statement {
     SimpleCommand(Command),
     Pipeline(Vec<Command>), 
+}
+
+// --- ADD THIS BLOCK ---
+impl Command {
+    pub fn new(program: String) -> Self {
+        Self {
+            program,
+            args: Vec::new(),
+            outfile: None,
+        }
+    }
 }

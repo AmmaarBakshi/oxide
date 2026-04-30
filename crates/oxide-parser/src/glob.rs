@@ -24,8 +24,7 @@ pub fn expand_glob(pattern: &str) -> Vec<String> {
     println!("DEBUG: Glob engine found -> {:?}", matches);
 
     if matches.is_empty() {
-        matches.push(pattern.to_string());
+        matches.push(pattern.to_string()); // Return the original string if no * or ? matched
     }
-
     matches
 }

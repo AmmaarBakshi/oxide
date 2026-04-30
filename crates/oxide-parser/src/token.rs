@@ -2,8 +2,10 @@
 pub enum Token {
     Word(String),
     StringLiteral(String),
-    RedirectOut,
     Pipe, 
     And,
     Or,
+    RedirectOut,    // >
+    RedirectIn,     // <
+    Background,     // &
 }

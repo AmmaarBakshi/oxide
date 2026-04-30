@@ -50,10 +50,15 @@ impl Executor {
         let executables = parser.parse();
 
         for exec in executables {
+            // --- THE LOGIC GATE ---
             match exec.condition {
-                Condition::And if *last_exit_code != 0 => continue,
-                Condition::Or if *last_exit_code == 0 => continue,
-                _ => {}
+                Condition::And => {
+                    if *last_exit_code != 0 { continue; } // Skip if previous failed
+                }
+                Condition::Or => {
+                    if *last_exit_code == 0 { continue; } // Skip if previous succeeded
+                }
+                Condition::Always => {} // Always run (default)
             }
 
             match exec.statement {
@@ -113,9 +118,18 @@ impl Executor {
                         *last_exit_code = oxide_builtins::open::execute(&expanded_args);
                         continue;
                     } else if cmd.program == "echo" {
-                        // Echo now uses the safely expanded arguments!
-                        let output = expanded_args.join(" "); 
-                        println!("{}", output);
+                        let output = expanded_args.join(" ");
+                        
+                        if let Some(filename) = &cmd.outfile {
+                            // If there's an outfile, write to the file instead of the screen
+                            if let Ok(mut file) = std::fs::File::create(filename) {
+                                use std::io::Write;
+                                let _ = writeln!(file, "{}", output);
+                            }
+                        } else {
+                            // Otherwise, just print to the terminal
+                            println!("{}", output);
+                        }
                         *last_exit_code = 0;
                         continue;
                     } else if cmd.program == "jobs" {
@@ -128,8 +142,15 @@ impl Executor {
                     } else if cmd.program == "find" {
                         *last_exit_code = oxide_builtins::find::execute(&expanded_args);
                         continue;
-                    }
-
+                    } else if cmd.program == "hello" {
+                        println!("why are u tiping hello? this is shell not ai.");
+                        *last_exit_code = 0;
+                        continue;
+                    } else if cmd.program == "hi" {
+                        println!("why are u tiping hi? this is shell not ai.");
+                        *last_exit_code = 0;
+                        continue;
+                    } 
                     // --- OS FALLBACK ---
                     // Check if the command is meant to run in the background
                     let is_background = expanded_args.last().map(|s| s.as_str()) == Some("&");

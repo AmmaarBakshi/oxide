@@ -32,23 +32,20 @@ pub fn spawn_piped(
     let mut process = Command::new(program);
     process.args(args);
 
-    // If there is output from the previous command, pipe it into this one!
     if let Some(stdout) = stdin {
         process.stdin(Stdio::from(stdout));
     }
 
     if !is_last {
-        // If it's NOT the last command, pipe its output forward
         process.stdout(Stdio::piped());
     } else {
-        // If it IS the last command, handle any "> file.txt" redirects
         redirect::apply(&mut process, outfile);
     }
 
     process.spawn().map_err(|_| format!("oxide: command not found: {}", program))
 }
 
-/// Spawns a process in the background (does NOT wait for it to finish)
+/// Spawns a process in the background
 pub fn spawn_background(
     program: &str, 
     args: &[String], 
