@@ -150,7 +150,14 @@ impl Executor {
                         println!("why are u tiping hi? this is shell not ai.");
                         *last_exit_code = 0;
                         continue;
-                    } 
+                    } else if cmd.program == "hi" {
+                        println!("why are u tiping hi? this is shell not ai.");
+                        *last_exit_code = 0;
+                        continue;
+                    } else if cmd.program == "touch" {
+                        *last_exit_code = oxide_builtins::touch::execute(&expanded_args);
+                        continue;
+                    }
                     // --- OS FALLBACK ---
                     // Check if the command is meant to run in the background
                     let is_background = expanded_args.last().map(|s| s.as_str()) == Some("&");
@@ -211,7 +218,10 @@ impl Executor {
                             "clear" => *last_exit_code = oxide_builtins::clear::execute(&expanded_args),
                             "jobs" => { job_manager.print_jobs(); *last_exit_code = 0; },
                             "find" => *last_exit_code = oxide_builtins::find::execute(&expanded_args),
-                            
+                            "touch" => {
+                                *last_exit_code = oxide_builtins::touch::execute(&expanded_args);
+                                continue;
+                            }
                             // Pipeline-specific data commands
                             "open" => {
                                 match oxide_builtins::open::get_data(&expanded_args[0]) {
