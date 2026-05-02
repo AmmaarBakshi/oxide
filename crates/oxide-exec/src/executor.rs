@@ -163,6 +163,9 @@ impl Executor {
                     } else if cmd.program == "env" {
                         *last_exit_code = oxide_builtins::env::execute();
                         continue;
+                    } else if cmd.program == "history" {
+                        *last_exit_code = oxide_builtins::history::execute(&history);
+                        continue;
                     }
                     // --- OS FALLBACK ---
                     // Check if the command is meant to run in the background
@@ -254,6 +257,13 @@ impl Executor {
                                     internal_data = Some(oxide_builtins::env::execute_with_input(data));
                                 } else {
                                     internal_data = Some(oxide_builtins::env::execute());
+                                }
+                            }
+                            "history" => {
+                                if let Some(data) = internal_data.take() {
+                                    internal_data = Some(oxide_builtins::history::execute_with_input(&history, data));
+                                } else {
+                                    *last_exit_code = oxide_builtins::history::execute(&history);
                                 }
                             }
 
