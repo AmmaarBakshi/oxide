@@ -265,6 +265,12 @@ impl Executor {
                                 } else {
                                     *last_exit_code = oxide_builtins::history::execute(&history);
                                 }
+                            } else if cmd.program == "grep" {
+                                if let Some(data) = internal_data.take() {
+                                    internal_data = Some(oxide_builtins::grep::execute_with_input(&expanded_args, data));
+                                } else {
+                                    eprintln!("oxide: grep: no input data received in pipeline");
+                                }
                             }
 
                             // OS Fallback Pipeline
