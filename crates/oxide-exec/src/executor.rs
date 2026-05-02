@@ -157,6 +157,9 @@ impl Executor {
                     } else if cmd.program == "touch" {
                         *last_exit_code = oxide_builtins::touch::execute(&expanded_args);
                         continue;
+                    } else if cmd.program == "cat" {
+                        *last_exit_code = oxide_builtins::cat::execute(&expanded_args);
+                        continue;
                     }
                     // --- OS FALLBACK ---
                     // Check if the command is meant to run in the background
@@ -234,6 +237,13 @@ impl Executor {
                                     internal_data = Some(oxide_builtins::get::execute(&expanded_args, data));
                                 } else {
                                     eprintln!("oxide: get: no input data received in pipeline");
+                                }
+                            }
+                            "cat" => {
+                                if let Some(data) = internal_data.take() {
+                                    internal_data = Some(oxide_builtins::cat::execute_with_input(&expanded_args, data));
+                                } else {
+                                    eprintln!("oxide: cat: no input data received in pipeline");
                                 }
                             }
 
