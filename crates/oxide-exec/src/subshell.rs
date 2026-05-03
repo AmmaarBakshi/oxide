@@ -7,6 +7,7 @@ pub fn execute(
     mode: &mut CompatMode,
     aliases: &mut HashMap<String, String>,
     job_manager: &mut crate::jobs::JobManager,
+    history: &[String],
 ) -> i32 {
     // 1. Snapshot the current directory before we do anything
     let original_dir = env::current_dir().expect("oxide: failed to get current directory");
@@ -25,6 +26,7 @@ pub fn execute(
         &mut subshell_aliases,
         &mut subshell_exit_code,
         job_manager,
+        history,
     );
 
     // 5. Restore the original directory! (This is the magic part)

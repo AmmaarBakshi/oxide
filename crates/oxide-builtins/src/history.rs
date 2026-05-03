@@ -2,14 +2,14 @@ use std::fs::{OpenOptions, read_to_string};
 use std::io::Write;
 use std::path::PathBuf;
 
-fn get_history_path() -> PathBuf {
+pub fn history_path() -> PathBuf {
     let mut path = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     path.push(".oxide_history");
     path
 }
 
 pub fn load() -> Vec<String> {
-    read_to_string(get_history_path())
+    read_to_string(history_path())
         .unwrap_or_default()
         .lines()
         .map(|s| s.to_string())
@@ -21,7 +21,7 @@ pub fn append(line: &str) {
     if let Ok(mut file) = OpenOptions::new()
         .create(true)
         .append(true)
-        .open(get_history_path()) 
+        .open(history_path()) 
     {
         let _ = writeln!(file, "{}", line);
     }

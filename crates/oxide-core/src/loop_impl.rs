@@ -9,6 +9,7 @@ use rustyline::history::DefaultHistory; // Needed for the new Editor type
 
 // Import our new auto-completer!
 use crate::completion::OxideHelper;
+use oxide_builtins::history;
 use rustyline::completion::FilenameCompleter;
 
 impl Shell {
@@ -28,7 +29,8 @@ impl Shell {
         };
         rl.set_helper(Some(helper));
 
-        let _ = rl.load_history("history.txt");
+        let history_path = history::history_path();
+        let _ = rl.load_history(&history_path);
 
         while self.state.is_running {
             // ... [The rest of your loop stays exactly the same!]
@@ -48,14 +50,17 @@ impl Shell {
                         self.state.is_running = false;
                         break;
                     }
-                    self.execute_line(trimmed); 
+                    self.state.history.push(trimmed.to_string());
+                    history::append(trimmed);
+                    self.execute_line(trimmed);
                 },
                 Err(ReadlineError::Interrupted) => { println!("^C"); continue; },
                 Err(ReadlineError::Eof) => { self.state.is_running = false; break; },
                 Err(err) => { println!("Error: {:?}", err); break; }
             }
         }
-        let _ = rl.save_history("history.txt");
+        let history_path = history::history_path();
+        let _ = rl.save_history(&history_path);
         Ok(())
     }
 
@@ -77,6 +82,8 @@ impl Shell {
                 break;
             }
 
+            self.state.history.push(trimmed.to_string());
+            history::append(trimmed);
             self.execute_line(trimmed);
         }
         Ok(())
@@ -92,11 +99,12 @@ impl Shell {
         let mut executor = oxide_exec::executor::Executor::new();
         
         executor.execute_line(
-            input, 
-            &mut self.state.mode, 
-            &mut self.state.aliases, 
+            input,
+            &mut self.state.mode,
+            &mut self.state.aliases,
             &mut self.state.last_exit_code,
-            &mut self.state.job_manager
+            &mut self.state.job_manager,
+            &self.state.history,
         );
     }
 }

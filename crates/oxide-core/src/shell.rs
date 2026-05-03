@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use oxide_compat::CompatMode; // <-- 1. Import it
 use oxide_exec::jobs::JobManager;
+use oxide_builtins::history as history_builtin;
 
 
 pub struct ShellState {
@@ -9,6 +10,7 @@ pub struct ShellState {
     pub aliases: HashMap<String, String>,
     pub mode: CompatMode, // <-- 2. Add the mode tracker
     pub job_manager: JobManager, // <-- Add this field
+    pub history: Vec<String>,
 }
 
 impl ShellState {
@@ -19,6 +21,7 @@ impl ShellState {
             aliases: HashMap::new(),
             mode: CompatMode::Oxide, // <-- 3. Default to native Oxide
             job_manager: JobManager::new(),
+            history: history_builtin::load(),
         }
     }
 }

@@ -42,7 +42,7 @@ impl Executor {
         let trimmed = processed_input.trim();
         if trimmed.starts_with('(') && trimmed.ends_with(')') {
             let inner_cmd = &trimmed[1..trimmed.len() - 1];
-            *last_exit_code = crate::subshell::execute(inner_cmd, mode, aliases, job_manager);
+            *last_exit_code = crate::subshell::execute(inner_cmd, mode, aliases, job_manager, history);
             return;
         }
 
@@ -137,7 +137,7 @@ impl Executor {
                         }
                     }
                 }
-                Statement::Pipeline(commands) => {
+                Statement::Pipeline(_commands) => {
                     // For now, call your existing pipeline logic here
                     // Ensure it also respects the security manager!
                 }
