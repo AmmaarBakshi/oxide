@@ -2,8 +2,7 @@ use crate::scope::Scope;
 use crate::functions::FunctionRegistry;
 use crate::stdlib::StdLib;
 use crate::modules::ModuleManager;
-use oxide_parser::ast::Statement; 
-
+use oxide_parser::ast::Statement;
 
 pub struct Runtime {
     pub scope: Scope,
@@ -22,13 +21,12 @@ impl Runtime {
         }
     }
 
-
     pub fn run_script(&mut self, statements: Vec<Statement>) -> i32 {
-        let mut last_exit = 0;
-        for stmt in statements {
-            // Here we will bridge to the executor logic
-            // but with script-specific logic like loops/ifs
+        let mut _last_exit = 0;
+        for _stmt in statements {
+            // In the next phase, we will map Statements to 
+            // Executor actions here. For now, we clear the warnings.
         }
-        last_exit
+        _last_exit
     }
 }

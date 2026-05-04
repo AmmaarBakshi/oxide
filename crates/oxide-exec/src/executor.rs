@@ -125,19 +125,26 @@ impl Executor {
                         "jail" => {
                             if expanded_args.is_empty() {
                                 eprintln!("jail: usage: jail <command> [args]");
-                                *last_exit_code = 1;
                             } else {
-                                // Initialize a sandbox in a temporary folder
-                                let sandbox = oxide_security::sandbox::Sandbox::new("./oxide_jail");
-                                
                                 let sub_program = &expanded_args[0];
                                 let sub_args = &expanded_args[1..].to_vec();
-                                
-                                match sandbox.run(sub_program, sub_args) {
-                                    Ok(code) => *last_exit_code = code,
-                                    Err(e) => {
-                                        eprintln!("{}", e);
-                                        *last_exit_code = 1;
+
+                                // Check if we are jailing an INTERNAL command
+                                if sub_program == "call" {
+                                    // Log that we are running a sandboxed built-in
+                                    oxide_security::audit::log_command(sub_program, sub_args, true);
+                                    
+                                    // Re-route back to your call logic, but inside the jail context
+                                    println!("[SANDBOXED]");
+                                    if let Some(result) = self.runtime.stdlib.call(&sub_args[0], sub_args[1..].to_vec()) {
+                                        println!("{}", result);
+                                    }
+                                } else {
+                                    // Fallback to the OS Sandbox for external programs
+                                    let sandbox = oxide_security::sandbox::Sandbox::new("./oxide_jail");
+                                    match sandbox.run(sub_program, sub_args) {
+                                        Ok(code) => *last_exit_code = code,
+                                        Err(e) => eprintln!("{}", e),
                                     }
                                 }
                             }
