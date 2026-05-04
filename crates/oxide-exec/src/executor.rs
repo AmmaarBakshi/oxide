@@ -160,7 +160,6 @@ impl Executor {
                         "ps" => *last_exit_code = oxide_builtins::ps::execute(&expanded_args),
                         "rm" => *last_exit_code = oxide_builtins::rm::execute(&expanded_args),
                         "sleep" => *last_exit_code = oxide_builtins::sleep::execute(&expanded_args),
-                        "source" => *last_exit_code = oxide_builtins::source::execute(&expanded_args),
                         "top" => *last_exit_code = oxide_builtins::top::execute(&expanded_args),
                         "unset" => *last_exit_code = oxide_builtins::unset::execute(&expanded_args),
                         "call" => {
@@ -222,6 +221,26 @@ impl Executor {
                             println!("Oxide Shell refreshed. System state reset to defaults.");
 
                            *last_exit_code = oxide_builtins::clear::execute(&expanded_args);
+                            continue;
+                        }
+                        "source" => {
+                            if let Some(file_name) = expanded_args.first() {
+                                // 1. Use the module manager to find and read the file
+                                match self.runtime.modules.load_module(file_name) {
+                                    Ok(script_content) => {
+                                        println!("oxide: sourcing {}...", file_name);
+                                        for line in script_content.lines() {
+                                            let trimmed = line.trim();
+                                            if !trimmed.is_empty() && !trimmed.starts_with('#') {
+
+                                            }
+                                        }
+                                    },
+                                    Err(e) => eprintln!("oxide: source error: {}", e),
+                                }
+                            } else {
+                                eprintln!("oxide: source: usage: source <file_name> (without .ox extension)");
+                            }
                             continue;
                         }
                         
