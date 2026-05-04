@@ -15,4 +15,7 @@ pub mod touch;
 pub mod cat;
 pub mod env;
 pub mod history;
+pub mod help;
+pub mod source;
+pub mod unset;
 pub mod grep;

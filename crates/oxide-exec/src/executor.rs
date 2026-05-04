@@ -137,7 +137,20 @@ impl Executor {
                             }
                             continue;
                         }
-                        
+                        "export" => {
+                            *last_exit_code = oxide_builtins::export::execute(&expanded_args);
+                        }
+                        "find" => *last_exit_code = oxide_builtins::find::execute(&expanded_args),
+                        "help" => *last_exit_code = oxide_builtins::help::execute(&expanded_args),
+                        "kill" => *last_exit_code = oxide_builtins::kill::execute(&expanded_args),
+                        "open" => *last_exit_code = oxide_builtins::open::execute(&expanded_args),
+                        "ps" => *last_exit_code = oxide_builtins::ps::execute(&expanded_args),
+                        "rm" => *last_exit_code = oxide_builtins::rm::execute(&expanded_args),
+                        "sleep" => *last_exit_code = oxide_builtins::sleep::execute(&expanded_args),
+                        "source" => *last_exit_code = oxide_builtins::source::execute(&expanded_args),
+                        "top" => *last_exit_code = oxide_builtins::top::execute(&expanded_args),
+                        "unset" => *last_exit_code = oxide_builtins::unset::execute(&expanded_args),
+
                         // --- OS FALLBACK ---
                         _ => {
                             let is_background = expanded_args.last().map(|s| s.as_str()) == Some("&");
