@@ -27,3 +27,7 @@
 [1777919123] ALLOWED | refresh []
 [1777919132] ALLOWED | clear []
 [1777919261] ALLOWED | refresh []
+[1777927439] ALLOWED | help []
+[1777927462] ALLOWED | help ["help"]
+[1777927467] ALLOWED | help ["jail"]
+[1777927507] ALLOWED | help []
