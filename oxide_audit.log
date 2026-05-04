@@ -14,3 +14,5 @@
 [1777909901] ALLOWED | echo ["Hi "]
 [1777909909] ALLOWED | echo ["Hi OxideShell"]
 [1777910012] ALLOWED | EXIT []
+[1777916508] ALLOWED | runtime.stdlib.call( ["math_add", ",", "vec![", "10", ",", "20", "])"]
+[1777917219] ALLOWED | call ["math_add", "10", "20"]

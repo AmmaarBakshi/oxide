@@ -1,16 +1,27 @@
 use crate::scope::Scope;
-use oxide_parser::ast::Statement;
+use crate::functions::FunctionRegistry;
+use crate::stdlib::StdLib;
+use crate::modules::ModuleManager;
+use oxide_parser::ast::Statement; 
+
 
 pub struct Runtime {
-    pub global_scope: Scope,
+    pub scope: Scope,
+    pub functions: FunctionRegistry,
+    pub stdlib: StdLib,
+    pub modules: ModuleManager,
 }
 
 impl Runtime {
     pub fn new() -> Self {
         Self {
-            global_scope: Scope::new(),
+            scope: Scope::new(),
+            functions: FunctionRegistry::new(),
+            stdlib: StdLib::new(),
+            modules: ModuleManager::new(),
         }
     }
+
 
     pub fn run_script(&mut self, statements: Vec<Statement>) -> i32 {
         let mut last_exit = 0;

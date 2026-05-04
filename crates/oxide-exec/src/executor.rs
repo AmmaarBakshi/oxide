@@ -4,11 +4,17 @@ use oxide_parser::lexer::Lexer;
 use oxide_parser::parser::Parser;
 use oxide_parser::ast::{Statement, Condition};
 
-pub struct Executor;
+pub struct Executor {
+    pub runtime: oxide_script::runtime::Runtime,
+    pub script_scope: oxide_script::scope::Scope, 
+}
 
 impl Executor {
     pub fn new() -> Self {
-        Self
+        Self {
+            runtime: oxide_script::runtime::Runtime::new(),
+            script_scope: oxide_script::scope::Scope::new(),
+        }
     }
 
     pub fn execute_line(
@@ -150,7 +156,41 @@ impl Executor {
                         "source" => *last_exit_code = oxide_builtins::source::execute(&expanded_args),
                         "top" => *last_exit_code = oxide_builtins::top::execute(&expanded_args),
                         "unset" => *last_exit_code = oxide_builtins::unset::execute(&expanded_args),
+                        "call" => {
+                            // Usage: call math_add 10 20
+                            if expanded_args.len() < 1 {
+                                eprintln!("oxide: call: usage: call <function_name> [args...]");
+                            } else {
+                                let func_name = &expanded_args[0];
+                                let func_args = expanded_args[1..].to_vec();
 
+                                // 1. Check StdLib first
+                                if let Some(result) = self.runtime.stdlib.call(func_name, func_args.clone()) {
+                                    println!("{}", result);
+                                } 
+                                // 2. Check User-defined functions next
+                                else if let Some(func) = self.runtime.functions.get(func_name) {
+                                    // Logic to execute the function body (Statements) would go here
+                                    println!("oxide: executing script function '{}'", func_name);
+                                } else {
+                                    eprintln!("oxide: call: function '{}' not found", func_name);
+                                }
+                            }
+                            *last_exit_code = 0;
+                            continue;
+                        }
+                        "import" => {
+                            if let Some(mod_name) = expanded_args.first() {
+                                match self.runtime.modules.load_module(mod_name) {
+                                    Ok(content) => {
+                                        println!("oxide: loaded module '{}'", mod_name);
+                                        // In a real scenario, you'd send 'content' back to the Lexer/Parser
+                                    },
+                                    Err(e) => eprintln!("oxide: import error: {}", e),
+                                }
+                            }
+                            continue;
+                        }
                         // --- OS FALLBACK ---
                         _ => {
                             let is_background = expanded_args.last().map(|s| s.as_str()) == Some("&");

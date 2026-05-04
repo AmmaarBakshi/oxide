@@ -9,4 +9,5 @@ oxide-parser = { path = "../oxide-parser" }
 oxide-builtins = { path = "../oxide-builtins" }
 oxide-data = { path = "../oxide-data" }
 oxide-security = { path = "../oxide-security" }
+oxide-script = { path = "../oxide-script" }
 ctrlc = "3.5.2"
