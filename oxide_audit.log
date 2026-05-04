@@ -22,3 +22,5 @@
 [1777917566] ALLOWED | call ["math_add", "1", "1"]
 [1777917569] ALLOWED | jail ["call", "math_add", "1", "1"]
 [1777917569] ALLOWED | call ["math_add", "1", "1"]
+[1777918161] ALLOWED | hi []
+[1777918525] ALLOWED | shifa []

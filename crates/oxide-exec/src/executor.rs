@@ -176,7 +176,7 @@ impl Executor {
                                     println!("{}", result);
                                 } 
                                 // 2. Check User-defined functions next
-                                else if let Some(func) = self.runtime.functions.get(func_name) {
+                                else if let Some(_func) = self.runtime.functions.get(func_name) {
                                     // Logic to execute the function body (Statements) would go here
                                     println!("oxide: executing script function '{}'", func_name);
                                 } else {
@@ -189,7 +189,7 @@ impl Executor {
                         "import" => {
                             if let Some(mod_name) = expanded_args.first() {
                                 match self.runtime.modules.load_module(mod_name) {
-                                    Ok(content) => {
+                                    Ok(_content) => {
                                         println!("oxide: loaded module '{}'", mod_name);
                                         // In a real scenario, you'd send 'content' back to the Lexer/Parser
                                     },
@@ -198,6 +198,22 @@ impl Executor {
                             }
                             continue;
                         }
+                        // Inside executor.rs -> execute_line -> match cmd.program.as_str()
+
+                        "hi" | "hello" => {
+                            // This handles both 'hi' and 'hello'
+                            println!("Hi there! You are running Oxide Shell.");
+                            println!("Current Mode: {:?}", mode);
+                            
+                            // If you want to use your new oxide-script scope here:
+                            if let Some(user) = self.runtime.scope.get("USER") {
+                                println!("Good to see you, {}!", user);
+                            }
+
+                            *last_exit_code = 0;
+                            continue; // Skip the OS fallback
+                        }
+                        
                         // --- OS FALLBACK ---
                         _ => {
                             let is_background = expanded_args.last().map(|s| s.as_str()) == Some("&");
