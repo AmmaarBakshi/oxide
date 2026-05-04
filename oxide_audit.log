@@ -1,1 +1,7 @@
 [1777833139] ALLOWED | git ["add", "."]
+[1777882039] BLOCKED | rm ["C:\\Windows\\System32"]
+[1777907554] ALLOWED | jail ["ls", ".."]
+[1777907780] ALLOWED | jail ["ls", ".."]
+[1777907788] ALLOWED | jail ["ls"]
+[1777907792] ALLOWED | ls []
+[1777907800] ALLOWED | wexit []

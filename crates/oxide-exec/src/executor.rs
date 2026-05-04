@@ -116,6 +116,27 @@ impl Executor {
                         "grep" => *last_exit_code = oxide_builtins::grep::execute(&expanded_args),
                         "jobs" => { job_manager.print_jobs(); *last_exit_code = 0; },
                         "clear" => *last_exit_code = oxide_builtins::clear::execute(&expanded_args),
+                        "jail" => {
+                            if expanded_args.is_empty() {
+                                eprintln!("jail: usage: jail <command> [args]");
+                                *last_exit_code = 1;
+                            } else {
+                                // Initialize a sandbox in a temporary folder
+                                let sandbox = oxide_security::sandbox::Sandbox::new("./oxide_jail");
+                                
+                                let sub_program = &expanded_args[0];
+                                let sub_args = &expanded_args[1..].to_vec();
+                                
+                                match sandbox.run(sub_program, sub_args) {
+                                    Ok(code) => *last_exit_code = code,
+                                    Err(e) => {
+                                        eprintln!("{}", e);
+                                        *last_exit_code = 1;
+                                    }
+                                }
+                            }
+                            continue;
+                        }
                         
                         // --- OS FALLBACK ---
                         _ => {
