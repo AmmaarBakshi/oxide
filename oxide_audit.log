@@ -24,3 +24,6 @@
 [1777917569] ALLOWED | call ["math_add", "1", "1"]
 [1777918161] ALLOWED | hi []
 [1777918525] ALLOWED | shifa []
+[1777919123] ALLOWED | refresh []
+[1777919132] ALLOWED | clear []
+[1777919261] ALLOWED | refresh []

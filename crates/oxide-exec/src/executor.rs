@@ -121,6 +121,7 @@ impl Executor {
                         "history" => *last_exit_code = oxide_builtins::history::execute(history),
                         "grep" => *last_exit_code = oxide_builtins::grep::execute(&expanded_args),
                         "jobs" => { job_manager.print_jobs(); *last_exit_code = 0; },
+                        "clear" => *last_exit_code = oxide_builtins::clear::execute(&expanded_args),
                         "jail" => {
                             if expanded_args.is_empty() {
                                 eprintln!("jail: usage: jail <command> [args]");
@@ -212,21 +213,15 @@ impl Executor {
                             *last_exit_code = 0;
                             continue; // Skip the OS fallback
                         }
-                        "refresh" | "cls" | "clear" => {
-                            // 1. Clear the terminal screen using ANSI escape codes
-                            // \x1B[2J clears the screen, \x1B[1;1H moves cursor to top-left
+                        "refresh" => {
                             print!("\x1B[2J\x1B[1;1H");
                             
-                            // 2. Optional: Reset internal shell state
                             *last_exit_code = 0;
                             *mode = oxide_compat::CompatMode::Oxide; 
                             
                             println!("Oxide Shell refreshed. System state reset to defaults.");
-                            
-                            // If you want to clear the scripting scope too, uncomment below:
-                            // self.runtime.scope = oxide_script::scope::Scope::new();
 
-                            *last_exit_code = 0;
+                           *last_exit_code = oxide_builtins::clear::execute(&expanded_args);
                             continue;
                         }
                         
