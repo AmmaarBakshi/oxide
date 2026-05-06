@@ -11,5 +11,5 @@ pub fn execute(args: &[String]) -> i32 {
     }
 
     println!("oxide: help: no detailed help available for '{}'.", args.join(" "));
-    0
+    0 
 }
