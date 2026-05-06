@@ -19,3 +19,4 @@ pub mod help;
 pub mod source;
 pub mod unset;
 pub mod grep;
+pub mod bind;
