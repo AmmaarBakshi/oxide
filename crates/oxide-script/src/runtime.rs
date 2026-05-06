@@ -2,7 +2,7 @@ use crate::scope::Scope;
 use crate::functions::FunctionRegistry;
 use crate::stdlib::StdLib;
 use crate::modules::ModuleManager;
-use oxide_parser::ast::Statement;
+use oxide_parser::ast::Statement; // Fixes E0425, E0433
 
 pub struct Runtime {
     pub scope: Scope,
@@ -22,11 +22,34 @@ impl Runtime {
     }
 
     pub fn run_script(&mut self, statements: Vec<Statement>) -> i32 {
-        let mut _last_exit = 0;
-        for _stmt in statements {
-            // In the next phase, we will map Statements to 
-            // Executor actions here. For now, we clear the warnings.
+        let mut last_exit = 0;
+
+        for stmt in statements {
+            match stmt {
+                Statement::Command(cmd) => {
+                    println!("DEBUG: Running command: {}", cmd.program);
+                }
+                Statement::Pipeline(cmds) => {
+                    println!("DEBUG: Running pipeline with {} commands", cmds.len());
+                }
+                Statement::If { condition, then_branch, else_branch } => {
+                    if self.evaluate_condition(&condition) {
+                        last_exit = self.run_script(then_branch);
+                    } else if let Some(branch) = else_branch {
+                        last_exit = self.run_script(branch);
+                    }
+                }
+            }
         }
-        _last_exit
+        last_exit
+    }
+
+    fn evaluate_condition(&self, condition: &str) -> bool {
+        let val = if condition.starts_with('$') {
+            self.scope.get(&condition[1..]).unwrap_or_else(|| "0".to_string())
+        } else {
+            condition.to_string()
+        };
+        !val.is_empty() && val != "0" && val != "false"
     }
 }

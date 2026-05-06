@@ -11,15 +11,16 @@ impl ModuleManager {
     }
 
     pub fn load_module(&self, name: &str) -> Result<String, String> {
-        for path in &self.search_paths {
-            let mut file_path = path.clone();
-            file_path.push(format!("{}.ox", name));
-            
-            if file_path.exists() {
-                return fs::read_to_string(file_path)
-                    .map_err(|e| format!("Failed to read module {}: {}", name, e));
-            }
+        // 1. Try with the extension
+        let mut path = std::path::PathBuf::from(name);
+        if path.extension().is_none() {
+            path.set_extension("ox");
         }
-        Err(format!("Module '{}' not found", name))
+
+        // 2. Debug: Print where we are actually looking
+        println!("DEBUG: Searching for module at: {:?}", path.canonicalize().unwrap_or(path.clone()));
+
+        std::fs::read_to_string(&path)
+            .map_err(|e| format!("Module '{}' not found: {}", name, e))
     }
 }

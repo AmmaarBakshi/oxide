@@ -6,4 +6,6 @@ edition.workspace = true
 [dependencies]
 sysinfo = "0.38.4"
 oxide-data = { path = "../oxide-data" } # <-- ADD THIS LINE!
+oxide-script = { path = "../oxide-script" }
+oxide-parser = { path = "../oxide-parser" }
 dirs = "6.0.0"

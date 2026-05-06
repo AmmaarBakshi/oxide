@@ -11,20 +11,13 @@ pub struct Executable {
     pub condition: Condition,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Command {
     pub program: String,
     pub args: Vec<String>,
-    pub outfile: Option<String>,
+    pub outfile: Option<String>, // Parser uses this for '>'
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub enum Statement {
-    SimpleCommand(Command),
-    Pipeline(Vec<Command>), 
-}
-
-// --- ADD THIS BLOCK ---
 impl Command {
     pub fn new(program: String) -> Self {
         Self {
@@ -33,4 +26,15 @@ impl Command {
             outfile: None,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Statement {
+    Command(Command), 
+    Pipeline(Vec<Command>),
+    If {
+        condition: String,
+        then_branch: Vec<Statement>,
+        else_branch: Option<Vec<Statement>>,
+    },
 }

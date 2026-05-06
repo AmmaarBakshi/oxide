@@ -65,6 +65,8 @@ impl<'a> Lexer<'a> {
                     }
                     tokens.push(Token::Word(word));
                 }
+                '{' => tokens.push(Token::LBrace),
+                '}' => tokens.push(Token::RBrace),
                 // Handle normal words (commands, flags, paths)
                 _ => {
                     let mut word = String::new();
