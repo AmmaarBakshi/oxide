@@ -1,21 +1,7 @@
-#[derive(Debug, PartialEq, Clone)]
-pub enum Condition {
-    Always,
-    And,   
-    Or,    
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct Executable {
-    pub statement: Statement,
-    pub condition: Condition,
-}
-
-#[derive(Debug, Clone, PartialEq)]
 pub struct Command {
     pub program: String,
     pub args: Vec<String>,
-    pub outfile: Option<String>, // Parser uses this for '>'
+    pub outfile: Option<String>,
 }
 
 impl Command {
@@ -28,14 +14,25 @@ impl Command {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, Debug)]
+pub enum Condition {
+    Always,
+    And,
+    Or,
+}
+
+pub struct Executable {
+    pub statement: Statement,
+    pub condition: Condition,
+}
+
 pub enum Statement {
     If {
         condition: String,
         body: Vec<Statement>,
-        else_if: Vec<(String, Vec<Statement>)>, // (condition, body)
+        else_if: Vec<(String, Vec<Statement>)>,
         else_body: Option<Vec<Statement>>,
     },
-    Command(String, Vec<String>),
-    Pipeline(Vec<Statement>), // Add this variant
+    Command(Command),
+    Pipeline(Vec<Command>),
 }

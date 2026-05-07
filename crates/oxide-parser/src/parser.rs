@@ -16,7 +16,7 @@ impl Parser {
         let mut current_condition = Condition::Always;
 
         while self.cursor < self.tokens.len() {
-            let start_pos = self.cursor; // Record current position
+            let start_pos = self.cursor;
 
             if let Some(statement) = self.parse_statement() {
                 executables.push(Executable {
@@ -25,10 +25,9 @@ impl Parser {
                 });
             }
 
-            // --- THE SAFETY VALVE ---
-            // If parse_statement didn't move the cursor, we force it forward
+            // Safety valve to prevent infinite loops
             if self.cursor == start_pos {
-                self.cursor += 1; 
+                self.cursor += 1;
             }
 
             if self.cursor < self.tokens.len() {
@@ -53,7 +52,7 @@ impl Parser {
     fn parse_statement(&mut self) -> Option<Statement> {
         if self.cursor >= self.tokens.len() { return None; }
 
-        // Intercept 'if' keyword for logic blocks
+        // Intercept 'if' keyword
         if let Token::Word(w) = &self.tokens[self.cursor] {
             if w == "if" {
                 return self.parse_if_statement();
@@ -84,13 +83,14 @@ impl Parser {
                     if self.cursor < self.tokens.len() {
                         if let Token::Word(file) | Token::StringLiteral(file) = &self.tokens[self.cursor] {
                             if let Some(cmd) = &mut current_cmd {
-                                cmd.outfile = Some(file.clone()); // Uses the outfile field
+                                cmd.outfile = Some(file.clone());
                             }
                             self.cursor += 1;
                         }
                     }
                 }
-                Token::And | Token::Or | Token::RBrace => break,
+                // Stop parsing statement if we hit logic operators or block closers
+                Token::And | Token::Or | Token::RBrace | Token::Newline => break,
                 _ => self.cursor += 1,
             }
         }
@@ -106,58 +106,74 @@ impl Parser {
         } else {
             Some(Statement::Pipeline(pipeline))
         }
-    }    
+    }
+
+    // New Helper: Extracts condition string between keywords (if/elif) and '{'
+    fn parse_condition(&mut self) -> String {
+        let mut condition = String::new();
+        while self.cursor < self.tokens.len() && !matches!(self.tokens[self.cursor], Token::LBrace) {
+            condition.push_str(&self.tokens[self.cursor].to_string());
+            condition.push(' ');
+            self.cursor += 1;
+        }
+        condition.trim().to_string()
+    }
 
     fn parse_if_statement(&mut self) -> Option<Statement> {
         self.cursor += 1; // consume 'if'
         
-        let mut condition = String::new();
-        if self.cursor < self.tokens.len() {
-            if let Token::Word(w) = &self.tokens[self.cursor] {
-                condition = w.clone();
-                self.cursor += 1;
-            }
-        }
+        let condition = self.parse_condition();
+        let body = self.parse_block();
+        
+        let mut else_if = Vec::new();
+        let mut else_body = None;
 
-        let then_branch = self.parse_block();
-        let mut else_branch = None;
-
-        if self.cursor < self.tokens.len() {
-            if let Token::Word(w) = &self.tokens[self.cursor] {
-                if w == "else" {
+        while self.cursor < self.tokens.len() {
+            match &self.tokens[self.cursor] {
+                Token::Word(w) if w == "elif" => {
                     self.cursor += 1;
-                    else_branch = Some(self.parse_block());
+                    let elif_cond = self.parse_condition();
+                    let elif_body = self.parse_block();
+                    else_if.push((elif_cond, elif_body));
                 }
+                Token::Word(w) if w == "else" => {
+                    self.cursor += 1;
+                    else_body = Some(self.parse_block());
+                    break; // 'else' is the terminal point
+                }
+                _ => break,
             }
         }
 
-        Some(Statement::If { condition, then_branch, else_branch })
+        Some(Statement::If { 
+            condition, 
+            body, 
+            else_if, 
+            else_body 
+        })
     }
 
     fn parse_block(&mut self) -> Vec<Statement> {
         let mut block = Vec::new();
+        
+        // Check for '{'
         if self.cursor < self.tokens.len() && matches!(self.tokens[self.cursor], Token::LBrace) {
-            // Inside parse_statement match for Token::If
-            let body = self.parse_block();
-            let mut else_if = Vec::new();
-            let mut else_body = None;
+            self.cursor += 1; // consume '{'
 
             while self.cursor < self.tokens.len() {
-                match &self.tokens[self.cursor] {
-                    Token::Word(w) if w == "elif" => {
-                        self.cursor += 1;
-                        let cond = self.parse_condition(); // helper to get string
-                        else_if.push((cond, self.parse_block()));
-                    }
-                    Token::Word(w) if w == "else" => {
-                        self.cursor += 1;
-                        else_body = Some(self.parse_block());
-                        break; // 'else' is always last
-                    }
-                    _ => break,
+                // Check for '}'
+                if matches!(self.tokens[self.cursor], Token::RBrace) {
+                    self.cursor += 1; // consume '}'
+                    return block;
+                }
+
+                if let Some(stmt) = self.parse_statement() {
+                    block.push(stmt);
+                } else {
+                    // Prevent hang if statement fails
+                    self.cursor += 1;
                 }
             }
-            return Some(Statement::If { condition, body, else_if, else_body });
         }
         block
     }
