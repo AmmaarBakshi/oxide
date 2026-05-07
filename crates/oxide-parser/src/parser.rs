@@ -65,6 +65,12 @@ impl Parser {
             if w == "if" {
                 return self.parse_if_statement();
             }
+            if w == "while" {
+                return self.parse_while_statement();
+            }
+            if w == "for" {
+                return self.parse_for_statement();
+            }
         }
 
         let mut pipeline = Vec::new();
@@ -159,6 +165,39 @@ impl Parser {
             else_if, 
             else_body 
         })
+    }
+
+    fn parse_while_statement(&mut self) -> Option<Statement> {
+        self.cursor += 1; // consume 'while'
+        let condition = self.parse_condition(); // reuse your existing helper!
+        let body = self.parse_block();
+        
+        Some(Statement::While { condition, body })
+    }
+
+    fn parse_for_statement(&mut self) -> Option<Statement> {
+        self.cursor += 1; // consume 'for'
+        
+        let mut variable = String::new();
+        if let Token::Word(w) = &self.tokens[self.cursor] {
+            variable = w.clone();
+            self.cursor += 1;
+        }
+
+        // consume 'in' if present
+        if self.cursor < self.tokens.len() && matches!(self.tokens[self.cursor], Token::Word(ref w) if w == "in") {
+            self.cursor += 1;
+        }
+
+        // Gather list of items until '{'
+        let mut values = Vec::new();
+        while self.cursor < self.tokens.len() && !matches!(self.tokens[self.cursor], Token::LBrace) {
+            values.push(self.tokens[self.cursor].to_string());
+            self.cursor += 1;
+        }
+
+        let body = self.parse_block();
+        Some(Statement::For { variable, values, body })
     }
 
     fn parse_block(&mut self) -> Vec<Statement> {

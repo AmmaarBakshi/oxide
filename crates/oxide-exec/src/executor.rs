@@ -298,6 +298,30 @@ impl Executor {
                     // For now, call your existing pipeline logic here
                     // Ensure it also respects the security manager!
                 }
+                Statement::While { condition, body } => {
+                    while self.evaluate_if_condition(&condition) {
+                        for b_stmt in &body {
+                            self.execute_statement(b_stmt, mode, aliases, last_exit_code, job_manager, history, &security);
+                        }
+                    }
+                }
+                Statement::For { variable, values, body } => {
+                    for val in values {
+                        // Expand variables (e.g. $VAR) and globs (e.g. *.txt)
+                        let expanded_val = oxide_parser::expand::expand_text(&val);
+                        let final_values = oxide_parser::glob::expand_glob(&expanded_val);
+                        
+                        for final_val in final_values {
+                            // Set the iteration variable (e.g., set i=1)
+                            std::env::set_var(&variable, &final_val);
+                            
+                            // Run the body
+                            for b_stmt in &body {
+                                self.execute_statement(b_stmt, mode, aliases, last_exit_code, job_manager, history, &security);
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -561,6 +585,27 @@ impl Executor {
             Statement::Pipeline(_commands) => {
                 // For now, call your existing pipeline logic here
                 // Ensure it also respects the security manager!
+            }
+            Statement::While { condition, body } => {
+                while self.evaluate_if_condition(condition) {
+                    for b_stmt in body {
+                        self.execute_statement(b_stmt, mode, aliases, last_exit_code, job_manager, history, security);
+                    }
+                }
+            }
+            Statement::For { variable, values, body } => {
+                for val in values {
+                    let expanded_val = oxide_parser::expand::expand_text(val);
+                    let final_values = oxide_parser::glob::expand_glob(&expanded_val);
+                    
+                    for final_val in final_values {
+                        std::env::set_var(variable, &final_val);
+                        
+                        for b_stmt in body {
+                            self.execute_statement(b_stmt, mode, aliases, last_exit_code, job_manager, history, security);
+                        }
+                    }
+                }
             }
         }
     }

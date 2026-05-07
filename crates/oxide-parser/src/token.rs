@@ -17,6 +17,9 @@ pub enum Token {
     Background,  // Add this
     Newline,
     Semicolon,
+    While,
+    For,
+    In,
 }
 
 impl fmt::Display for Token {
@@ -26,6 +29,9 @@ impl fmt::Display for Token {
             Token::If => write!(f, "if"),
             Token::Elif => write!(f, "elif"),
             Token::Else => write!(f, "else"),
+            Token::While => write!(f, "while"),
+            Token::For => write!(f, "for"),
+            Token::In => write!(f, "in"),
             Token::LBrace => write!(f, "{{"),
             Token::RBrace => write!(f, "}}"),
             Token::And => write!(f, "&&"),

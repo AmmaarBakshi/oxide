@@ -33,6 +33,15 @@ pub enum Statement {
         else_if: Vec<(String, Vec<Statement>)>,
         else_body: Option<Vec<Statement>>,
     },
+    While {
+        condition: String,
+        body: Vec<Statement>,
+    },
+    For {
+        variable: String,
+        values: Vec<String>,
+        body: Vec<Statement>,
+    },
     Command(Command),
     Pipeline(Vec<Command>),
 }
