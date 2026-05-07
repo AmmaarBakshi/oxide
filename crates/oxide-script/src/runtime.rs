@@ -32,11 +32,23 @@ impl Runtime {
                 Statement::Pipeline(cmds) => {
                     println!("DEBUG: Running pipeline with {} commands", cmds.len());
                 }
-                Statement::If { condition, then_branch, else_branch } => {
-                    if self.evaluate_condition(&condition) {
-                        last_exit = self.run_script(then_branch);
-                    } else if let Some(branch) = else_branch {
-                        last_exit = self.run_script(branch);
+                Statement::If { condition, body, else_if, else_body } => {
+                    if self.eval_condition(condition) {
+                        self.run_script(body);
+                    } else {
+                        let mut matched = false;
+                        for (elif_cond, elif_body) in else_if {
+                            if self.eval_condition(elif_cond) {
+                                self.run_script(elif_body);
+                                matched = true;
+                                break;
+                            }
+                        }
+                        if !matched {
+                            if let Some(eb) = else_body {
+                                self.run_script(eb);
+                            }
+                        }
                     }
                 }
             }

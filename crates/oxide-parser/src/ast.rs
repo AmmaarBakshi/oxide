@@ -30,11 +30,12 @@ impl Command {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
-    Command(Command), 
-    Pipeline(Vec<Command>),
     If {
         condition: String,
-        then_branch: Vec<Statement>,
-        else_branch: Option<Vec<Statement>>,
+        body: Vec<Statement>,
+        else_if: Vec<(String, Vec<Statement>)>, // (condition, body)
+        else_body: Option<Vec<Statement>>,
     },
+    Command(String, Vec<String>),
+    Pipeline(Vec<Statement>), // Add this variant
 }

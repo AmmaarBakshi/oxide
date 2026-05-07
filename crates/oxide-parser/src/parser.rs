@@ -137,25 +137,27 @@ impl Parser {
     fn parse_block(&mut self) -> Vec<Statement> {
         let mut block = Vec::new();
         if self.cursor < self.tokens.len() && matches!(self.tokens[self.cursor], Token::LBrace) {
-            self.cursor += 1; // Consume '{'
-            
+            // Inside parse_statement match for Token::If
+            let body = self.parse_block();
+            let mut else_if = Vec::new();
+            let mut else_body = None;
+
             while self.cursor < self.tokens.len() {
-                if let Token::RBrace = self.tokens[self.cursor] {
-                    self.cursor += 1; // Consume '}'
-                    break;
-                }
-
-                let start_cursor = self.cursor;
-                if let Some(stmt) = self.parse_statement() {
-                    block.push(stmt);
-                }
-
-                // SAFETY: If the cursor didn't move, we are stuck in an infinite loop.
-                // Force it forward to prevent the memory allocation crash.
-                if self.cursor == start_cursor {
-                    self.cursor += 1;
+                match &self.tokens[self.cursor] {
+                    Token::Word(w) if w == "elif" => {
+                        self.cursor += 1;
+                        let cond = self.parse_condition(); // helper to get string
+                        else_if.push((cond, self.parse_block()));
+                    }
+                    Token::Word(w) if w == "else" => {
+                        self.cursor += 1;
+                        else_body = Some(self.parse_block());
+                        break; // 'else' is always last
+                    }
+                    _ => break,
                 }
             }
+            return Some(Statement::If { condition, body, else_if, else_body });
         }
         block
     }
