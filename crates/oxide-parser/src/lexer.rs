@@ -18,9 +18,13 @@ impl<'a> Lexer<'a> {
 
         while let Some(&c) = self.input.peek() {
             match c {
-                // Skip whitespace
-                ' ' | '\t' | '\n' | '\r' => {
+                // Skip horizontal whitespace, but handle newlines
+                ' ' | '\t' | '\r' => {
                     self.input.next();
+                }
+                '\n' => {
+                    self.input.next();
+                    tokens.push(Token::Newline);
                 }
                 // Handle Pipes and OR (|, ||)
                 '|' => {
@@ -65,13 +69,23 @@ impl<'a> Lexer<'a> {
                     }
                     tokens.push(Token::Word(word));
                 }
-                '{' => tokens.push(Token::LBrace),
-                '}' => tokens.push(Token::RBrace),
+                ';' => {
+                    self.input.next();
+                    tokens.push(Token::Newline);
+                }
+                '{' => {
+                    self.input.next();
+                    tokens.push(Token::LBrace);
+                }
+                '}' => {
+                    self.input.next();
+                    tokens.push(Token::RBrace);
+                }
                 // Handle normal words (commands, flags, paths)
                 _ => {
                     let mut word = String::new();
                     while let Some(&next_c) = self.input.peek() {
-                        if next_c.is_whitespace() || "><|&\"'".contains(next_c) {
+                        if next_c.is_whitespace() || "><|&\"';{}".contains(next_c) {
                             break;
                         }
                         word.push(self.input.next().unwrap());

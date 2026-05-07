@@ -16,6 +16,14 @@ impl Parser {
         let mut current_condition = Condition::Always;
 
         while self.cursor < self.tokens.len() {
+            // Skip separators
+            while self.cursor < self.tokens.len() && matches!(self.tokens[self.cursor], Token::Newline | Token::Semicolon) {
+                self.cursor += 1;
+            }
+            if self.cursor >= self.tokens.len() {
+                break;
+            }
+
             let start_pos = self.cursor;
 
             if let Some(statement) = self.parse_statement() {
@@ -90,7 +98,7 @@ impl Parser {
                     }
                 }
                 // Stop parsing statement if we hit logic operators or block closers
-                Token::And | Token::Or | Token::RBrace | Token::Newline => break,
+                Token::And | Token::Or | Token::RBrace | Token::Newline | Token::Semicolon => break,
                 _ => self.cursor += 1,
             }
         }

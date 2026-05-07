@@ -1,7 +1,7 @@
 use std::path::PathBuf;
-use std::fs;
 
 pub struct ModuleManager {
+    #[allow(dead_code)]
     search_paths: Vec<PathBuf>,
 }
 

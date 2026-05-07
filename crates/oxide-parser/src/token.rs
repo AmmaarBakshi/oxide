@@ -16,6 +16,7 @@ pub enum Token {
     RedirectIn,  // Add this
     Background,  // Add this
     Newline,
+    Semicolon,
 }
 
 impl fmt::Display for Token {
@@ -34,6 +35,7 @@ impl fmt::Display for Token {
             Token::RedirectIn => write!(f, "<"),     // Add this
             Token::Background => write!(f, "&"),     // Add this
             Token::Newline => write!(f, "\n"),
+            Token::Semicolon => write!(f, ";"),
         }
     }
 }

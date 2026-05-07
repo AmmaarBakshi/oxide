@@ -24,7 +24,10 @@ pub fn execute(args: &[String]) -> i32 {
 
             // 4. Initialize a temporary runtime to execute the script
             let mut runtime = Runtime::new();
-            runtime.run_script(statements)
+            runtime.run_script(statements);
+            
+            // Return 0 for success!
+            0 
         }
         Err(e) => {
             eprintln!("oxide: source: failed to read '{}': {}", filename, e);

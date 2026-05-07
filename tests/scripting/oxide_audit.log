@@ -9,3 +9,5 @@
 [1777936006] ALLOWED | source ["test1.ox"]
 [1777936228] ALLOWED | source ["test1.ox"]
 [1777936421] ALLOWED | source ["test1.ox"]
+[1778181793] ALLOWED | source ["test1.ox"]
+[1778181793] ALLOWED | export ["STATUS=2"]

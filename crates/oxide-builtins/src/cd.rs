@@ -1,56 +1,33 @@
 use std::env;
-use std::path::{Path, PathBuf};
-use crate::Builtin;
+use std::path::PathBuf;
 
-pub struct CdCommand;
+pub fn execute(args: &[String]) -> i32 {
+    // 1. Determine the target directory
+    let target = if args.is_empty() {
+        // Fallback to ~ (Home) if no args are provided
+        dirs::home_dir().unwrap_or_else(|| PathBuf::from("."))
+    } else if args[0] == "-" {
+        // Fallback to previous directory if `cd -` is used
+        PathBuf::from(env::var("OLDPWD").unwrap_or_else(|_| ".".to_string()))
+    } else {
+        PathBuf::from(&args[0])
+    };
 
-impl CdCommand {
-    fn get_target(&self, args: &[String], runtime: &mut crate::Runtime) -> PathBuf {
-        let dir = match args.get(0) {
-            Some(d) if d == "-" => {
-                return PathBuf::from(runtime.scope.get("OLDPWD").unwrap_or_else(|| ".".to_string()));
+    let current_pwd = env::current_dir().unwrap_or_default();
+
+    // 2. Attempt to change the directory
+    match env::set_current_dir(&target) {
+        Ok(_) => {
+            // 3. Update the environment variables upon success
+            env::set_var("OLDPWD", current_pwd);
+            if let Ok(new_pwd) = env::current_dir() {
+                env::set_var("PWD", new_pwd);
             }
-            Some(d) => d.clone(),
-            None => runtime.scope.get("HOME").unwrap_or_else(|| ".".to_string()),
-        };
-
-        // Handle CDPATH search
-        if !dir.starts_with('/') && !dir.starts_with('.') {
-            if let Some(cdpath) = runtime.scope.get("CDPATH") {
-                for path in cdpath.split(':') {
-                    let full_path = Path::new(path).join(&dir);
-                    if full_path.is_dir() { return full_path; }
-                }
-            }
+            0 // Success
         }
-        PathBuf::from(dir)
-    }
-}
-
-impl Builtin for CdCommand {
-    fn name(&self) -> &str { "cd" }
-
-    fn execute(&self, args: &[String], runtime: &mut crate::Runtime) -> i32 {
-        let current_pwd = env::current_dir().unwrap_or_default();
-        let target = self.get_target(args, runtime);
-
-        // Process options -L (default) and -P
-        let final_path = if args.contains(&"-P".to_string()) {
-            target.canonicalize().unwrap_or(target)
-        } else {
-            target
-        };
-
-        match env::set_current_dir(&final_path) {
-            Ok(_) => {
-                runtime.scope.set("OLDPWD", &current_pwd.to_string_lossy());
-                runtime.scope.set("PWD", &env::current_dir().unwrap().to_string_lossy());
-                0
-            }
-            Err(e) => {
-                eprintln!("oxide: cd: {}: {}", final_path.display(), e);
-                1
-            }
+        Err(e) => {
+            eprintln!("oxide: cd: {}: {}", target.display(), e);
+            1 // Error
         }
     }
 }

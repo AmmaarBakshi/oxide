@@ -235,18 +235,15 @@ impl Executor {
 // crates/oxide-exec/src/executor.rs
 
                         "source" => {
-                            // Change 'args' to whatever your executor calls the argument list
                             if let Some(file) = cmd.args.get(0) { 
                                 match std::fs::read_to_string(file) {
                                     Ok(contents) => {
                                         let tokens = Lexer::new(&contents).tokenize();
                                         let mut parser = Parser::new(tokens);
+                                        let statements: Vec<Statement> = parser.parse().into_iter().map(|e| e.statement).collect();
                                         
-                                        // Extract statements from the executables
-                                        let statements = parser.parse().into_iter().map(|e| e.statement).collect();
-                                        
-                                        // Use the shell's main runtime to keep variable state
-                                        self.runtime.run_script(statements);
+                                        // USE NATIVE EXECUTOR INSTEAD OF RUNTIME
+                                        self.execute_statements(&statements, mode, aliases, last_exit_code, job_manager, history, &security);
                                         *last_exit_code = 0;
                                     },
                                     Err(e) => {
@@ -254,9 +251,6 @@ impl Executor {
                                         *last_exit_code = 1;
                                     }
                                 }
-                            } else {
-                                eprintln!("oxide: source: usage: source <filename>");
-                                *last_exit_code = 1;
                             }
                             continue;
                         }
@@ -281,11 +275,23 @@ impl Executor {
                         }
                     }
                 }
-                Statement::If { condition, then_branch, else_branch } => {
+                Statement::If { condition, body, else_if, else_body } => {
                     if self.evaluate_if_condition(&condition) {
-                        self.execute_statements(&then_branch, mode, aliases, last_exit_code, job_manager, history, &security);
-                    } else if let Some(branch) = else_branch {
-                        self.execute_statements(&branch, mode, aliases, last_exit_code, job_manager, history, &security);
+                        self.execute_statements(&body, mode, aliases, last_exit_code, job_manager, history, &security);
+                    } else {
+                        let mut executed = false;
+                        for (else_if_condition, else_if_body) in else_if {
+                            if self.evaluate_if_condition(&else_if_condition) {
+                                self.execute_statements(&else_if_body, mode, aliases, last_exit_code, job_manager, history, &security);
+                                executed = true;
+                                break;
+                            }
+                        }
+                        if !executed {
+                            if let Some(else_statements) = &else_body {
+                                self.execute_statements(else_statements, mode, aliases, last_exit_code, job_manager, history, &security);
+                            }
+                        }
                     }
                 }
                 Statement::Pipeline(_commands) => {
@@ -313,7 +319,7 @@ impl Executor {
 
     fn evaluate_if_condition(&self, condition: &str) -> bool {
         let val = if condition.starts_with('$') {
-            self.runtime.scope.get(&condition[1..]).unwrap_or_else(|| "0".to_string())
+            std::env::var(&condition[1..]).unwrap_or_else(|_| "0".to_string())
         } else {
             condition.to_string()
         };
@@ -335,9 +341,15 @@ impl Executor {
             Statement::Command(cmd) => {
                 // Pre-process arguments (Expansion & Globs)
                 let mut expanded_args: Vec<String> = Vec::new();
-                for arg in &cmd.args {
-                    let text_expanded = oxide_parser::expand::expand_text(arg);
-                    expanded_args.extend(oxide_parser::glob::expand_glob(&text_expanded));
+                let skip_glob = matches!(cmd.program.as_str(), "source" | "alias" | "unset" | "export");
+                
+                if skip_glob {
+                    expanded_args = cmd.args.clone();
+                } else {
+                    for arg in &cmd.args {
+                        let text_expanded = oxide_parser::expand::expand_text(arg);
+                        expanded_args.extend(oxide_parser::glob::expand_glob(&text_expanded));
+                    }
                 }
 
                 // --- 2. SECURITY CHECK ---
@@ -493,7 +505,7 @@ impl Executor {
                                 Ok(contents) => {
                                     let tokens = Lexer::new(&contents).tokenize();
                                     let mut parser = Parser::new(tokens);
-                                    let statements = parser.parse().into_iter().map(|e| e.statement).collect();
+                                    let statements: Vec<Statement> = parser.parse().into_iter().map(|e| e.statement).collect();
                                     self.runtime.run_script(statements);
                                     *last_exit_code = 0;
                                 },
@@ -527,11 +539,23 @@ impl Executor {
                     }
                 }
             }
-            Statement::If { condition, then_branch, else_branch } => {
+            Statement::If { condition, body, else_if, else_body } => {
                 if self.evaluate_if_condition(&condition) {
-                    self.execute_statements(&then_branch, mode, aliases, last_exit_code, job_manager, history, security);
-                } else if let Some(branch) = else_branch {
-                    self.execute_statements(&branch, mode, aliases, last_exit_code, job_manager, history, security);
+                    self.execute_statements(&body, mode, aliases, last_exit_code, job_manager, history, security);
+                } else {
+                    let mut executed = false;
+                    for (else_if_condition, else_if_body) in else_if {
+                        if self.evaluate_if_condition(&else_if_condition) {
+                            self.execute_statements(&else_if_body, mode, aliases, last_exit_code, job_manager, history, security);
+                            executed = true;
+                            break;
+                        }
+                    }
+                    if !executed {
+                        if let Some(else_statements) = &else_body {
+                            self.execute_statements(else_statements, mode, aliases, last_exit_code, job_manager, history, security);
+                        }
+                    }
                 }
             }
             Statement::Pipeline(_commands) => {
