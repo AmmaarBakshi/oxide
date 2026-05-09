@@ -10,4 +10,5 @@ oxide-builtins = { path = "../oxide-builtins" }
 oxide-data = { path = "../oxide-data" }
 oxide-security = { path = "../oxide-security" }
 oxide-script = { path = "../oxide-script" }
+oxide-perf = { path = "../oxide-perf" }
 ctrlc = "3.5.2"

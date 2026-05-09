@@ -24,7 +24,7 @@ impl Executor {
         aliases: &mut HashMap<String, String>,
         last_exit_code: &mut i32,
         job_manager: &mut crate::jobs::JobManager,
-        history: &[String], // Ensure this is passed from main.rs
+        history: &[String],
     ) {
         // --- 1. Initialize Security Gatekeeper ---
         let security = oxide_security::permissions::PermissionManager::new();
@@ -52,11 +52,23 @@ impl Executor {
             return;
         }
 
+        // ==========================================
+        // ⏱️ PROFILING START: Lexing & Parsing
+        // ==========================================
+        let parse_timer = oxide_perf::profiler::Profiler::start();
+
         // Tokenize and Parse
         let mut lexer = Lexer::new(&processed_input);
         let tokens = lexer.tokenize();
         let mut parser = Parser::new(tokens);
         let executables = parser.parse();
+
+        parse_timer.stop("Lexer & Parser");
+
+        // ==========================================
+        // ⏱️ PROFILING START: Execution Engine
+        // ==========================================
+        let exec_timer = oxide_perf::profiler::Profiler::start();
 
         for exec in executables {
             // --- LOGIC GATES (&& and ||) ---
@@ -68,6 +80,7 @@ impl Executor {
 
             match exec.statement {
                 Statement::Command(cmd) => {
+                    // ... [Your existing Command matching logic stays exactly the same here] ...
                     // Skip glob expansion for commands that shouldn't have their args globbed
                     let mut expanded_args: Vec<String> = Vec::new();
                     
