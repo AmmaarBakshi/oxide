@@ -105,6 +105,7 @@ impl Shell {
             &mut self.state.last_exit_code,
             &mut self.state.job_manager,
             &self.state.history,
+            &mut self.state.command_cache,
         );
     }
 }

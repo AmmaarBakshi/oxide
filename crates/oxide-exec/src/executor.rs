@@ -247,7 +247,7 @@ impl Executor {
                         // In your executor's match branch for "source"
 // crates/oxide-exec/src/executor.rs
 
-                        "source" => {
+                       "source" => {
                             if let Some(file) = cmd.args.get(0) { 
                                 match std::fs::read_to_string(file) {
                                     Ok(contents) => {
@@ -256,7 +256,10 @@ impl Executor {
                                         let statements: Vec<Statement> = parser.parse().into_iter().map(|e| e.statement).collect();
                                         
                                         // USE NATIVE EXECUTOR INSTEAD OF RUNTIME
-                                        self.execute_statements(&statements, mode, aliases, last_exit_code, job_manager, history, &security);
+                                        self.execute_statements(
+                                            &statements, mode, aliases, last_exit_code, 
+                                            job_manager, history, &security, command_cache // <-- PASS IT HERE
+                                        );
                                         *last_exit_code = 0;
                                     },
                                     Err(e) => {
@@ -274,8 +277,35 @@ impl Executor {
                             let mut args = expanded_args.clone();
                             if is_background { args.pop(); }
 
+                            // ==========================================
+                            // ⚡ THE SPEED BOOST: Command Cache Check
+                            // ==========================================
+                            let program_path = if let Some(cached_path) = command_cache.get(&cmd.program) {
+                                cached_path.to_string_lossy().to_string()
+                            } else {
+                                let mut resolved = cmd.program.clone();
+                                if let Ok(paths) = std::env::var("PATH") {
+                                    // Search the OS PATH manually to find it
+                                    for dir in std::env::split_paths(&paths) {
+                                        let full_path = dir.join(&cmd.program);
+                                        let full_path_exe = dir.join(format!("{}.exe", cmd.program)); // Windows compat
+                                        
+                                        if full_path.is_file() {
+                                            resolved = full_path.to_string_lossy().to_string();
+                                            command_cache.insert(cmd.program.clone(), full_path);
+                                            break;
+                                        } else if full_path_exe.is_file() {
+                                            resolved = full_path_exe.to_string_lossy().to_string();
+                                            command_cache.insert(cmd.program.clone(), full_path_exe);
+                                            break;
+                                        }
+                                    }
+                                }
+                                resolved
+                            };
+
                             if is_background {
-                                match crate::process::spawn_background(&cmd.program, &args, &cmd.outfile) {
+                                match crate::process::spawn_background(&program_path, &args, &cmd.outfile) {
                                     Ok(child) => {
                                         job_manager.add(cmd.program.clone(), child);
                                         *last_exit_code = 0;
@@ -283,7 +313,8 @@ impl Executor {
                                     Err(e) => { eprintln!("{}", e); *last_exit_code = 127; }
                                 }
                             } else {
-                                *last_exit_code = crate::process::spawn_single(&cmd.program, &args, &cmd.outfile);
+                                // Use the cached absolute path instead of just the name!
+                                *last_exit_code = crate::process::spawn_single(&program_path, &args, &cmd.outfile);
                             }
                         }
                     }
