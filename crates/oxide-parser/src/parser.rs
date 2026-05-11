@@ -60,7 +60,6 @@ impl Parser {
     pub(crate) fn parse_statement(&mut self) -> Option<Statement> {
         if self.cursor >= self.tokens.len() { return None; }
 
-        // 1. Check if the statement starts with a logic keyword
         if let Token::Word(w) = &self.tokens[self.cursor] {
             match w.as_str() {
                 "if" => return self.parse_if_statement(),
@@ -100,7 +99,7 @@ impl Parser {
                         }
                     }
                 }
-                // Stop parsing statement if we hit logic operators or block closers
+
                 Token::And | Token::Or | Token::RBrace | Token::Newline | Token::Semicolon => break,
                 _ => self.cursor += 1,
             }
