@@ -2,8 +2,8 @@ use crate::token::Token;
 use crate::ast::{Command, Statement, Condition, Executable};
 
 pub struct Parser {
-    tokens: Vec<Token>,
-    cursor: usize,
+    pub(crate) tokens: Vec<Token>, // Changed to pub(crate)
+    pub(crate) cursor: usize,
 }
 
 impl Parser {
