@@ -57,19 +57,16 @@ impl Parser {
         executables
     }
 
-    fn parse_statement(&mut self) -> Option<Statement> {
+    pub(crate) fn parse_statement(&mut self) -> Option<Statement> {
         if self.cursor >= self.tokens.len() { return None; }
 
-        // Intercept 'if' keyword
+        // 1. Check if the statement starts with a logic keyword
         if let Token::Word(w) = &self.tokens[self.cursor] {
-            if w == "if" {
-                return self.parse_if_statement();
-            }
-            if w == "while" {
-                return self.parse_while_statement();
-            }
-            if w == "for" {
-                return self.parse_for_statement();
+            match w.as_str() {
+                "if" => return self.parse_if_statement(),
+                "while" => return self.parse_while_statement(),
+                "for" => return self.parse_for_statement(),
+                _ => {} // Fall through to pipeline parsing
             }
         }
 
@@ -120,6 +117,9 @@ impl Parser {
         } else {
             Some(Statement::Pipeline(pipeline))
         }
+
+        // 2. If it's not a logic block, it must be a standard command/pipeline
+        self.parse_pipeline_or_command()
     }
 
     // New Helper: Extracts condition string between keywords (if/elif) and '{'
