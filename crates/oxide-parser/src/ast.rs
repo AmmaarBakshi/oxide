@@ -2,6 +2,9 @@ pub struct Command {
     pub program: String,
     pub args: Vec<String>,
     pub outfile: Option<String>,
+    pub infile: Option<String>,
+    /// When true, `outfile` is opened in append mode (`>>`) rather than truncating (`>`).
+    pub append: bool,
 }
 
 impl Command {
@@ -10,6 +13,8 @@ impl Command {
             program,
             args: Vec::new(),
             outfile: None,
+            infile: None,
+            append: false,
         }
     }
 }

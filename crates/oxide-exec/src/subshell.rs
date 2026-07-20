@@ -18,6 +18,8 @@ pub fn execute(
 
     // 3. Boot up a completely fresh execution engine for the sandbox
     let mut sandbox_executor = crate::executor::Executor::new();
+    // Subshells are short-lived, so give them a throwaway path cache.
+    let mut subshell_cache = oxide_perf::cache::CommandCache::new();
 
     // 4. Run the inner commands!
     sandbox_executor.execute_line(
@@ -27,6 +29,7 @@ pub fn execute(
         &mut subshell_exit_code,
         job_manager,
         history,
+        &mut subshell_cache,
     );
 
     // 5. Restore the original directory! (This is the magic part)

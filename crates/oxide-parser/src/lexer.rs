@@ -48,8 +48,13 @@ impl<'a> Lexer<'a> {
                 }
                 // Handle Redirects (<, >)
                 '>' => {
-                    self.input.next();
-                    tokens.push(Token::RedirectOut);
+                    self.input.next(); // consume the first >
+                    if self.input.peek() == Some(&'>') {
+                        self.input.next(); // consume the second >
+                        tokens.push(Token::RedirectAppend);
+                    } else {
+                        tokens.push(Token::RedirectOut);
+                    }
                 }
                 '<' => {
                     self.input.next();
@@ -85,6 +90,21 @@ impl<'a> Lexer<'a> {
                 _ => {
                     let mut word = String::new();
                     while let Some(&next_c) = self.input.peek() {
+                        // Keep a `${...}` expansion intact even though `{`/`}` are
+                        // otherwise block delimiters — it belongs to this word.
+                        if next_c == '$' {
+                            word.push(self.input.next().unwrap()); // consume '$'
+                            if self.input.peek() == Some(&'{') {
+                                word.push(self.input.next().unwrap()); // consume '{'
+                                while let Some(&b) = self.input.peek() {
+                                    word.push(self.input.next().unwrap());
+                                    if b == '}' {
+                                        break;
+                                    }
+                                }
+                            }
+                            continue;
+                        }
                         if next_c.is_whitespace() || "><|&\"';{}".contains(next_c) {
                             break;
                         }

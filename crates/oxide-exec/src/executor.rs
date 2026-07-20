@@ -2,11 +2,12 @@ use std::collections::HashMap;
 use oxide_compat::CompatMode;
 use oxide_parser::lexer::Lexer;
 use oxide_parser::parser::Parser;
-use oxide_parser::ast::{Statement, Condition};
+use oxide_parser::ast::{Statement, Condition, Command};
+use oxide_perf::cache::CommandCache;
 
 pub struct Executor {
     pub runtime: oxide_script::runtime::Runtime,
-    pub script_scope: oxide_script::scope::Scope, 
+    pub script_scope: oxide_script::scope::Scope,
 }
 
 impl Executor {
@@ -25,6 +26,7 @@ impl Executor {
         last_exit_code: &mut i32,
         job_manager: &mut crate::jobs::JobManager,
         history: &[String],
+        command_cache: &mut CommandCache,
     ) {
         // --- 1. Initialize Security Gatekeeper ---
         let security = oxide_security::permissions::PermissionManager::new();
@@ -127,8 +129,13 @@ impl Executor {
                         "echo" => {
                             let output = expanded_args.join(" ");
                             if let Some(filename) = &cmd.outfile {
-                                if let Ok(mut file) = std::fs::File::create(filename) {
-                                    use std::io::Write;
+                                use std::io::Write;
+                                let opened = if cmd.append {
+                                    std::fs::OpenOptions::new().create(true).append(true).open(filename)
+                                } else {
+                                    std::fs::File::create(filename)
+                                };
+                                if let Ok(mut file) = opened {
                                     let _ = writeln!(file, "{}", output);
                                 }
                             } else {
@@ -257,8 +264,8 @@ impl Executor {
                                         
                                         // USE NATIVE EXECUTOR INSTEAD OF RUNTIME
                                         self.execute_statements(
-                                            &statements, mode, aliases, last_exit_code, 
-                                            job_manager, history, &security, command_cache // <-- PASS IT HERE
+                                            &statements, mode, aliases, last_exit_code,
+                                            job_manager, history, &security, command_cache
                                         );
                                         *last_exit_code = 0;
                                     },
@@ -280,32 +287,10 @@ impl Executor {
                             // ==========================================
                             // ⚡ THE SPEED BOOST: Command Cache Check
                             // ==========================================
-                            let program_path = if let Some(cached_path) = command_cache.get(&cmd.program) {
-                                cached_path.to_string_lossy().to_string()
-                            } else {
-                                let mut resolved = cmd.program.clone();
-                                if let Ok(paths) = std::env::var("PATH") {
-                                    // Search the OS PATH manually to find it
-                                    for dir in std::env::split_paths(&paths) {
-                                        let full_path = dir.join(&cmd.program);
-                                        let full_path_exe = dir.join(format!("{}.exe", cmd.program)); // Windows compat
-                                        
-                                        if full_path.is_file() {
-                                            resolved = full_path.to_string_lossy().to_string();
-                                            command_cache.insert(cmd.program.clone(), full_path);
-                                            break;
-                                        } else if full_path_exe.is_file() {
-                                            resolved = full_path_exe.to_string_lossy().to_string();
-                                            command_cache.insert(cmd.program.clone(), full_path_exe);
-                                            break;
-                                        }
-                                    }
-                                }
-                                resolved
-                            };
+                            let program_path = resolve_program_path(&cmd.program, command_cache);
 
                             if is_background {
-                                match crate::process::spawn_background(&program_path, &args, &cmd.outfile) {
+                                match crate::process::spawn_background(&program_path, &args, &cmd.outfile, cmd.append, &cmd.infile) {
                                     Ok(child) => {
                                         job_manager.add(cmd.program.clone(), child);
                                         *last_exit_code = 0;
@@ -314,38 +299,37 @@ impl Executor {
                                 }
                             } else {
                                 // Use the cached absolute path instead of just the name!
-                                *last_exit_code = crate::process::spawn_single(&program_path, &args, &cmd.outfile);
+                                *last_exit_code = crate::process::spawn_single(&program_path, &args, &cmd.outfile, cmd.append, &cmd.infile);
                             }
                         }
                     }
                 }
                 Statement::If { condition, body, else_if, else_body } => {
                     if self.evaluate_if_condition(&condition) {
-                        self.execute_statements(&body, mode, aliases, last_exit_code, job_manager, history, &security);
+                        self.execute_statements(&body, mode, aliases, last_exit_code, job_manager, history, &security, command_cache);
                     } else {
                         let mut executed = false;
                         for (else_if_condition, else_if_body) in else_if {
                             if self.evaluate_if_condition(&else_if_condition) {
-                                self.execute_statements(&else_if_body, mode, aliases, last_exit_code, job_manager, history, &security);
+                                self.execute_statements(&else_if_body, mode, aliases, last_exit_code, job_manager, history, &security, command_cache);
                                 executed = true;
                                 break;
                             }
                         }
                         if !executed {
                             if let Some(else_statements) = &else_body {
-                                self.execute_statements(else_statements, mode, aliases, last_exit_code, job_manager, history, &security);
+                                self.execute_statements(else_statements, mode, aliases, last_exit_code, job_manager, history, &security, command_cache);
                             }
                         }
                     }
                 }
-                Statement::Pipeline(_commands) => {
-                    // For now, call your existing pipeline logic here
-                    // Ensure it also respects the security manager!
+                Statement::Pipeline(commands) => {
+                    self.execute_pipeline(&commands, last_exit_code, command_cache, &security);
                 }
                 Statement::While { condition, body } => {
                     while self.evaluate_if_condition(&condition) {
                         for b_stmt in &body {
-                            self.execute_statement(b_stmt, mode, aliases, last_exit_code, job_manager, history, &security);
+                            self.execute_statement(b_stmt, mode, aliases, last_exit_code, job_manager, history, &security, command_cache);
                         }
                     }
                 }
@@ -361,10 +345,62 @@ impl Executor {
                             
                             // Run the body
                             for b_stmt in &body {
-                                self.execute_statement(b_stmt, mode, aliases, last_exit_code, job_manager, history, &security);
+                                self.execute_statement(b_stmt, mode, aliases, last_exit_code, job_manager, history, &security, command_cache);
                             }
                         }
                     }
+                }
+            }
+        }
+
+        exec_timer.stop("Execution Engine");
+    }
+
+    /// Runs a chained pipeline (`a | b | c`), streaming each command's stdout
+    /// into the next command's stdin. Only the final command's `outfile`
+    /// redirect and exit code are honored.
+    ///
+    /// Note: pipeline stages are spawned as external OS processes, so shell
+    /// builtins (e.g. `grep`, `cat`) don't participate here yet — that needs
+    /// builtins refactored to read stdin / write to a captured stdout.
+    fn execute_pipeline(
+        &mut self,
+        commands: &[Command],
+        last_exit_code: &mut i32,
+        command_cache: &mut CommandCache,
+        security: &oxide_security::permissions::PermissionManager,
+    ) {
+        let mut pipeline = crate::pipeline::OsPipeline::new();
+        let len = commands.len();
+
+        for (i, cmd) in commands.iter().enumerate() {
+            let is_last = i == len - 1;
+
+            // Expand arguments (env vars + globs), matching single-command behavior.
+            let mut expanded_args: Vec<String> = Vec::new();
+            for arg in &cmd.args {
+                let text_expanded = oxide_parser::expand::expand_text(arg);
+                expanded_args.extend(oxide_parser::glob::expand_glob(&text_expanded));
+            }
+
+            // --- SECURITY CHECK ---
+            if let Err(e) = security.is_allowed(&cmd.program, &expanded_args) {
+                oxide_security::audit::log_command(&cmd.program, &expanded_args, false);
+                eprintln!("{}", e);
+                *last_exit_code = 1;
+                return;
+            }
+            oxide_security::audit::log_command(&cmd.program, &expanded_args, true);
+
+            let program_path = resolve_program_path(&cmd.program, command_cache);
+
+            match pipeline.execute_node(&program_path, &expanded_args, is_last, &cmd.outfile, cmd.append, &cmd.infile) {
+                Ok(Some(code)) => *last_exit_code = code,
+                Ok(None) => {} // Intermediate stage; keep chaining.
+                Err(e) => {
+                    eprintln!("{}", e);
+                    *last_exit_code = 127;
+                    return;
                 }
             }
         }
@@ -379,9 +415,10 @@ impl Executor {
         job_manager: &mut crate::jobs::JobManager,
         history: &[String],
         security: &oxide_security::permissions::PermissionManager,
+        command_cache: &mut CommandCache,
     ) {
         for statement in statements {
-            self.execute_statement(statement, mode, aliases, last_exit_code, job_manager, history, security);
+            self.execute_statement(statement, mode, aliases, last_exit_code, job_manager, history, security, command_cache);
         }
     }
 
@@ -404,6 +441,7 @@ impl Executor {
         job_manager: &mut crate::jobs::JobManager,
         history: &[String],
         security: &oxide_security::permissions::PermissionManager,
+        command_cache: &mut CommandCache,
     ) {
         match statement {
             Statement::Command(cmd) => {
@@ -451,8 +489,13 @@ impl Executor {
                     "echo" => {
                         let output = expanded_args.join(" ");
                         if let Some(filename) = &cmd.outfile {
-                            if let Ok(mut file) = std::fs::File::create(filename) {
-                                use std::io::Write;
+                            use std::io::Write;
+                            let opened = if cmd.append {
+                                std::fs::OpenOptions::new().create(true).append(true).open(filename)
+                            } else {
+                                std::fs::File::create(filename)
+                            };
+                            if let Ok(mut file) = opened {
                                 let _ = writeln!(file, "{}", output);
                             }
                         } else {
@@ -593,8 +636,10 @@ impl Executor {
                         let mut args = expanded_args.clone();
                         if is_background { args.pop(); }
 
+                        let program_path = resolve_program_path(&cmd.program, command_cache);
+
                         if is_background {
-                            match crate::process::spawn_background(&cmd.program, &args, &cmd.outfile) {
+                            match crate::process::spawn_background(&program_path, &args, &cmd.outfile, cmd.append, &cmd.infile) {
                                 Ok(child) => {
                                     job_manager.add(cmd.program.clone(), child);
                                     *last_exit_code = 0;
@@ -602,38 +647,37 @@ impl Executor {
                                 Err(e) => { eprintln!("{}", e); *last_exit_code = 127; }
                             }
                         } else {
-                            *last_exit_code = crate::process::spawn_single(&cmd.program, &args, &cmd.outfile);
+                            *last_exit_code = crate::process::spawn_single(&program_path, &args, &cmd.outfile, cmd.append, &cmd.infile);
                         }
                     }
                 }
             }
             Statement::If { condition, body, else_if, else_body } => {
                 if self.evaluate_if_condition(&condition) {
-                    self.execute_statements(&body, mode, aliases, last_exit_code, job_manager, history, security);
+                    self.execute_statements(&body, mode, aliases, last_exit_code, job_manager, history, security, command_cache);
                 } else {
                     let mut executed = false;
                     for (else_if_condition, else_if_body) in else_if {
                         if self.evaluate_if_condition(&else_if_condition) {
-                            self.execute_statements(&else_if_body, mode, aliases, last_exit_code, job_manager, history, security);
+                            self.execute_statements(&else_if_body, mode, aliases, last_exit_code, job_manager, history, security, command_cache);
                             executed = true;
                             break;
                         }
                     }
                     if !executed {
                         if let Some(else_statements) = &else_body {
-                            self.execute_statements(else_statements, mode, aliases, last_exit_code, job_manager, history, security);
+                            self.execute_statements(else_statements, mode, aliases, last_exit_code, job_manager, history, security, command_cache);
                         }
                     }
                 }
             }
-            Statement::Pipeline(_commands) => {
-                // For now, call your existing pipeline logic here
-                // Ensure it also respects the security manager!
+            Statement::Pipeline(commands) => {
+                self.execute_pipeline(commands, last_exit_code, command_cache, security);
             }
             Statement::While { condition, body } => {
                 while self.evaluate_if_condition(condition) {
                     for b_stmt in body {
-                        self.execute_statement(b_stmt, mode, aliases, last_exit_code, job_manager, history, security);
+                        self.execute_statement(b_stmt, mode, aliases, last_exit_code, job_manager, history, security, command_cache);
                     }
                 }
             }
@@ -646,12 +690,40 @@ impl Executor {
                         std::env::set_var(variable, &final_val);
                         
                         for b_stmt in body {
-                            self.execute_statement(b_stmt, mode, aliases, last_exit_code, job_manager, history, security);
+                            self.execute_statement(b_stmt, mode, aliases, last_exit_code, job_manager, history, security, command_cache);
                         }
                     }
                 }
             }
         }
     }
+}
+
+/// Resolves `program` to an absolute path by scanning `PATH`, caching the
+/// result so repeated invocations skip the filesystem walk. Falls back to the
+/// bare program name if it can't be found (letting the OS spawn report the error).
+fn resolve_program_path(program: &str, command_cache: &mut CommandCache) -> String {
+    if let Some(cached_path) = command_cache.get(program) {
+        return cached_path.to_string_lossy().to_string();
+    }
+
+    if let Ok(paths) = std::env::var("PATH") {
+        for dir in std::env::split_paths(&paths) {
+            let full_path = dir.join(program);
+            let full_path_exe = dir.join(format!("{}.exe", program)); // Windows compat
+
+            if full_path.is_file() {
+                let resolved = full_path.to_string_lossy().to_string();
+                command_cache.insert(program.to_string(), full_path);
+                return resolved;
+            } else if full_path_exe.is_file() {
+                let resolved = full_path_exe.to_string_lossy().to_string();
+                command_cache.insert(program.to_string(), full_path_exe);
+                return resolved;
+            }
+        }
+    }
+
+    program.to_string()
 }
 

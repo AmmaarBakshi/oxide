@@ -30,6 +30,30 @@ impl Parser {
                         if let Token::Word(file) | Token::StringLiteral(file) = &self.tokens[self.cursor] {
                             if let Some(cmd) = &mut current_cmd {
                                 cmd.outfile = Some(file.clone());
+                                cmd.append = false;
+                            }
+                            self.cursor += 1;
+                        }
+                    }
+                }
+                Token::RedirectAppend => {
+                    self.cursor += 1;
+                    if self.cursor < self.tokens.len() {
+                        if let Token::Word(file) | Token::StringLiteral(file) = &self.tokens[self.cursor] {
+                            if let Some(cmd) = &mut current_cmd {
+                                cmd.outfile = Some(file.clone());
+                                cmd.append = true;
+                            }
+                            self.cursor += 1;
+                        }
+                    }
+                }
+                Token::RedirectIn => {
+                    self.cursor += 1;
+                    if self.cursor < self.tokens.len() {
+                        if let Token::Word(file) | Token::StringLiteral(file) = &self.tokens[self.cursor] {
+                            if let Some(cmd) = &mut current_cmd {
+                                cmd.infile = Some(file.clone());
                             }
                             self.cursor += 1;
                         }

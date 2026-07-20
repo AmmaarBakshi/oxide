@@ -18,10 +18,12 @@ impl OsPipeline {
         args: &[String],
         is_last: bool,
         outfile: &Option<String>,
+        append: bool,
+        infile: &Option<String>,
     ) -> Result<Option<i32>, String> {
-        
+
         // Use our process wrapper to spawn the command with the correct pipes
-        match process::spawn_piped(program, args, self.previous_stdout.take(), is_last, outfile) {
+        match process::spawn_piped(program, args, self.previous_stdout.take(), is_last, outfile, append, infile) {
             Ok(mut child) => {
                 if !is_last {
                     // If it's NOT the last command, capture its output for the next one
