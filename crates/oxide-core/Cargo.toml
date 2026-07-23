@@ -12,4 +12,5 @@ oxide-compat = { version = "0.1.0", path = "../oxide-compat" }
 oxide-data = { path = "../oxide-data" }
 oxide-exec = { path = "../oxide-exec" }
 oxide-perf = { path = "../oxide-perf" }
+oxide-ui = { path = "../oxide-ui" }
 colored = "3.1.1"

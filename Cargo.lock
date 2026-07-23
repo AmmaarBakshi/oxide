@@ -557,6 +557,7 @@ dependencies = [
  "oxide-exec",
  "oxide-parser",
  "oxide-perf",
+ "oxide-ui",
  "rustyline",
 ]
 
@@ -617,6 +618,10 @@ dependencies = [
 [[package]]
 name = "oxide-ui"
 version = "0.1.0"
+dependencies = [
+ "oxide-builtins",
+ "rustyline",
+]
 
 [[package]]
 name = "oxide-utils"

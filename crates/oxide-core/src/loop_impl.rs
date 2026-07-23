@@ -4,30 +4,20 @@ use std::env;
 use std::io::{BufRead, BufReader};
 
 use rustyline::error::ReadlineError;
-use rustyline::Editor; // Changed from DefaultEditor
-use rustyline::history::DefaultHistory; // Needed for the new Editor type
 
-// Import our new auto-completer!
-use crate::completion::OxideHelper;
 use oxide_builtins::history;
-use rustyline::completion::FilenameCompleter;
 
 impl Shell {
     // ==========================================
     // MODE 1: INTERACTIVE KEYBOARD (REPL)
     // ==========================================
     pub fn run_repl(&mut self) -> anyhow::Result<()> {
-        
+
         // 1. Turn on the Signal Shield!
         oxide_exec::signals::init();
 
-        // 2. Create the Editor with our custom OxideHelper attached!
-        let mut rl: Editor<OxideHelper, DefaultHistory> = Editor::new()?;
-        
-        let helper = OxideHelper {
-            completer: FilenameCompleter::new(),
-        };
-        rl.set_helper(Some(helper));
+        // 2. Build the interactive editor (highlighting, completion, hints).
+        let mut rl = oxide_ui::build_editor()?;
 
         let history_path = history::history_path();
         let _ = rl.load_history(&history_path);
@@ -37,10 +27,11 @@ impl Shell {
             let cwd = env::current_dir()?;
             let cwd_str = cwd.display().to_string();
 
-            // 1. Build a clean, plain-text prompt
-            let prompt = format!("oxide {} > ", cwd_str);
+            // 1. Build a clean, plain-text prompt (coloring is applied by the
+            //    editor's highlighter so cursor math stays correct).
+            let prompt = oxide_ui::prompt::render(&cwd_str);
 
-            // 2. Hand it directly to rustyline. No truecolor, no flush()!
+            // 2. Hand it to the editor.
             match rl.readline(&prompt) {
                 Ok(line) => {
                     let trimmed = line.trim();

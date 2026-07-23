@@ -20,3 +20,12 @@ pub mod source;
 pub mod unset;
 pub mod grep;
 pub mod bind;
+
+/// Names of every shell builtin. Consumed by the interactive line editor
+/// (`oxide-ui`) for tab-completion and syntax highlighting so the two never
+/// drift out of sync with the module list above.
+pub const NAMES: &[&str] = &[
+    "alias", "cd", "ls", "pwd", "export", "kill", "sleep", "rm", "ps", "top",
+    "open", "find", "clear", "touch", "cat", "env", "history", "help", "source",
+    "unset", "grep", "bind",
+];

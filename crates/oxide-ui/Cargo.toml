@@ -4,3 +4,5 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+rustyline = "18.0.0"
+oxide-builtins = { path = "../oxide-builtins" }
