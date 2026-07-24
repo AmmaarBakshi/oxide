@@ -16,8 +16,10 @@ impl Shell {
         // 1. Turn on the Signal Shield!
         oxide_exec::signals::init();
 
-        // 2. Build the interactive editor (highlighting, completion, hints).
-        let mut rl = oxide_ui::build_editor()?;
+        // 2. Load user config (prompt + theme) and build the interactive
+        //    editor (highlighting, completion, hints).
+        let config = oxide_config::Config::load();
+        let mut rl = oxide_ui::build_editor(&config)?;
 
         let history_path = history::history_path();
         let _ = rl.load_history(&history_path);
@@ -29,7 +31,7 @@ impl Shell {
 
             // 1. Build a clean, plain-text prompt (coloring is applied by the
             //    editor's highlighter so cursor math stays correct).
-            let prompt = oxide_ui::prompt::render(&cwd_str);
+            let prompt = oxide_ui::prompt::render(&config.prompt.template, &cwd_str);
 
             // 2. Hand it to the editor.
             match rl.readline(&prompt) {

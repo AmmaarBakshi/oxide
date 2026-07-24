@@ -13,4 +13,5 @@ oxide-data = { path = "../oxide-data" }
 oxide-exec = { path = "../oxide-exec" }
 oxide-perf = { path = "../oxide-perf" }
 oxide-ui = { path = "../oxide-ui" }
+oxide-config = { path = "../oxide-config" }
 colored = "3.1.1"

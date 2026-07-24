@@ -1,58 +1,66 @@
 //! Syntax highlighting for the interactive line editor.
 //!
 //! Two surfaces are highlighted: the prompt (`colorize_prompt`) and the input
-//! line the user is typing (`highlight_line`). Both return ANSI-wrapped copies
-//! of the text — crucially, they never add or remove *visible* characters, so
-//! rustyline's cursor math (which runs against the raw line) stays correct.
+//! line the user is typing (`highlight_line`). Colors come from the active
+//! [`Theme`]. Both functions return ANSI-wrapped copies of the text —
+//! crucially, they never add or remove *visible* characters, so rustyline's
+//! cursor math (which runs against the raw line) stays correct.
 
 use std::borrow::Cow;
 
-// Rusty-orange (#B7410E), Oxide's accent color.
-pub(crate) const ORANGE: &str = "\x1b[38;2;183;65;14m";
-pub(crate) const RED: &str = "\x1b[31m";
-pub(crate) const GREEN: &str = "\x1b[32m";
-pub(crate) const YELLOW: &str = "\x1b[33m";
-pub(crate) const CYAN: &str = "\x1b[36m";
-pub(crate) const DIM: &str = "\x1b[90m";
-pub(crate) const RESET: &str = "\x1b[0m";
+use oxide_config::theme::RESET;
+use oxide_config::Theme;
 
-/// Colorize the leading "oxide" of the prompt. We wrap it here rather than
-/// baking ANSI into the prompt string so rustyline measures the prompt's
-/// *visible* width correctly and the cursor lands in the right place.
-pub fn colorize_prompt(prompt: &str) -> Cow<'_, str> {
-    match prompt.strip_prefix("oxide") {
-        Some(rest) => Cow::Owned(format!("{ORANGE}oxide{RESET}{rest}")),
+/// Colorize the leading accent word of the prompt (e.g. "oxide"). We wrap it
+/// here rather than baking ANSI into the prompt string so rustyline measures
+/// the prompt's *visible* width correctly and the cursor lands in the right
+/// place.
+pub fn colorize_prompt<'p>(prompt: &'p str, accent_word: &str, theme: &Theme) -> Cow<'p, str> {
+    if accent_word.is_empty() || theme.accent.is_empty() {
+        return Cow::Borrowed(prompt);
+    }
+    match prompt.strip_prefix(accent_word) {
+        Some(rest) => Cow::Owned(format!("{}{accent_word}{RESET}{rest}", theme.accent)),
         None => Cow::Borrowed(prompt),
     }
 }
 
 /// Grey out an autosuggestion hint (fish-style ghost text).
-pub fn colorize_hint(hint: &str) -> String {
-    format!("{DIM}{hint}{RESET}")
+pub fn colorize_hint(hint: &str, theme: &Theme) -> String {
+    if theme.hint.is_empty() {
+        return hint.to_string();
+    }
+    format!("{}{hint}{RESET}", theme.hint)
 }
 
 fn is_op_char(c: char) -> bool {
     matches!(c, '|' | '>' | '<' | '&' | ';')
 }
 
+/// Append `text` wrapped in `color` (or plain, if `color` is empty).
 fn push_colored(out: &mut String, color: &str, text: &str) {
-    out.push_str(color);
-    out.push_str(text);
-    out.push_str(RESET);
+    if color.is_empty() {
+        out.push_str(text);
+    } else {
+        out.push_str(color);
+        out.push_str(text);
+        out.push_str(RESET);
+    }
 }
 
 /// Highlight a full input line. `commands` is the sorted list of known command
 /// names (builtins + executables on PATH) used to distinguish a recognized
-/// command from an unknown one.
+/// command from an unknown one; `theme` supplies the colors.
 ///
 /// Coloring rules:
 /// - first word of each command (start of line, or after `|`/`;`/`&`):
-///   orange if recognized (or looks like a path), red otherwise;
-/// - `-`/`--` flags: yellow;
-/// - quoted strings: green;
-/// - operators (`|`, `>`, `>>`, `<`, `&`, `&&`, `;`): cyan;
+///   `theme.command` if recognized (or looks like a path), else
+///   `theme.unknown_command`;
+/// - `-`/`--` flags: `theme.flag`;
+/// - quoted strings: `theme.string`;
+/// - operators (`|`, `>`, `>>`, `<`, `&`, `&&`, `;`): `theme.operator`;
 /// - everything else: default terminal color.
-pub fn highlight_line<'l>(line: &'l str, commands: &[String]) -> Cow<'l, str> {
+pub fn highlight_line<'l>(line: &'l str, commands: &[String], theme: &Theme) -> Cow<'l, str> {
     if line.is_empty() {
         return Cow::Borrowed(line);
     }
@@ -85,7 +93,7 @@ pub fn highlight_line<'l>(line: &'l str, commands: &[String]) -> Cow<'l, str> {
             if op.contains('|') || op.contains(';') || op.contains('&') {
                 expect_command = true;
             }
-            push_colored(&mut out, CYAN, &op);
+            push_colored(&mut out, &theme.operator, &op);
             continue;
         }
 
@@ -101,7 +109,7 @@ pub fn highlight_line<'l>(line: &'l str, commands: &[String]) -> Cow<'l, str> {
                 i += 1; // include the closing quote
             }
             let s: String = chars[start..i].iter().collect();
-            push_colored(&mut out, GREEN, &s);
+            push_colored(&mut out, &theme.string, &s);
             expect_command = false;
             continue;
         }
@@ -118,25 +126,21 @@ pub fn highlight_line<'l>(line: &'l str, commands: &[String]) -> Cow<'l, str> {
         }
         let word: String = chars[start..i].iter().collect();
 
-        let color = if expect_command {
+        let color: &str = if expect_command {
             // A path to an executable (contains a separator) is assumed valid
             // rather than flagged as an unknown command.
             if word.contains('/') || word.contains('\\') || is_known(commands, &word) {
-                ORANGE
+                &theme.command
             } else {
-                RED
+                &theme.unknown_command
             }
         } else if word.starts_with('-') {
-            YELLOW
+            &theme.flag
         } else {
             ""
         };
 
-        if color.is_empty() {
-            out.push_str(&word);
-        } else {
-            push_colored(&mut out, color, &word);
-        }
+        push_colored(&mut out, color, &word);
         expect_command = false;
     }
 
@@ -156,64 +160,82 @@ mod tests {
         vec!["cat".into(), "echo".into(), "ls".into()]
     }
 
+    fn theme() -> Theme {
+        Theme::default()
+    }
+
     #[test]
-    fn colorizes_leading_oxide() {
-        let out = colorize_prompt("oxide C:\\path > ");
-        assert_eq!(out, format!("{ORANGE}oxide{RESET} C:\\path > "));
-        assert!(out.starts_with(ORANGE));
+    fn colorizes_leading_accent_word() {
+        let t = theme();
+        let out = colorize_prompt("oxide C:\\path > ", "oxide", &t);
+        assert_eq!(out, format!("{}oxide{RESET} C:\\path > ", t.accent));
         assert!(out.contains("C:\\path > "));
     }
 
     #[test]
-    fn leaves_unrelated_prompt_untouched() {
-        let out = colorize_prompt("$ ");
+    fn leaves_prompt_without_accent_word_untouched() {
+        let out = colorize_prompt("$ ", "oxide", &theme());
         assert_eq!(out, "$ ");
     }
 
     #[test]
+    fn empty_accent_word_disables_prompt_color() {
+        let out = colorize_prompt("oxide > ", "", &theme());
+        assert_eq!(out, "oxide > ");
+    }
+
+    #[test]
     fn empty_line_is_borrowed_unchanged() {
-        assert_eq!(highlight_line("", &cmds()), "");
+        assert_eq!(highlight_line("", &cmds(), &theme()), "");
     }
 
     #[test]
-    fn known_command_is_orange_unknown_is_red() {
-        let known = highlight_line("ls", &cmds());
-        assert!(known.contains(ORANGE) && known.contains("ls"));
-        assert!(!known.contains(RED));
+    fn known_command_uses_command_color_unknown_uses_unknown() {
+        let t = theme();
+        let known = highlight_line("ls", &cmds(), &t);
+        assert!(known.contains(&t.command) && known.contains("ls"));
 
-        let unknown = highlight_line("frobnicate", &cmds());
-        assert!(unknown.contains(RED) && unknown.contains("frobnicate"));
+        let unknown = highlight_line("frobnicate", &cmds(), &t);
+        assert!(unknown.contains(&t.unknown_command) && unknown.contains("frobnicate"));
     }
 
     #[test]
-    fn flags_are_yellow_and_strings_green() {
-        let out = highlight_line("ls -la \"my file\"", &cmds());
-        assert!(out.contains(YELLOW)); // -la
-        assert!(out.contains(GREEN)); // "my file"
+    fn flags_and_strings_are_colored() {
+        let t = theme();
+        let out = highlight_line("ls -la \"my file\"", &cmds(), &t);
+        assert!(out.contains(&t.flag)); // -la
+        assert!(out.contains(&t.string)); // "my file"
     }
 
     #[test]
     fn command_after_pipe_is_re_evaluated() {
-        // `cat` (known) then `bogus` (unknown) after the pipe.
-        let out = highlight_line("cat x | bogus", &cmds());
-        assert!(out.contains(CYAN)); // the pipe
-        assert!(out.contains(RED)); // bogus flagged as unknown command
+        let t = theme();
+        let out = highlight_line("cat x | bogus", &cmds(), &t);
+        assert!(out.contains(&t.operator)); // the pipe
+        assert!(out.contains(&t.unknown_command)); // bogus flagged as unknown
     }
 
     #[test]
-    fn path_command_is_not_flagged_red() {
-        let out = highlight_line("./tool.exe", &cmds());
-        assert!(out.contains(ORANGE));
-        assert!(!out.contains(RED));
+    fn path_command_is_not_flagged_unknown() {
+        let t = theme();
+        let out = highlight_line("./tool.exe", &cmds(), &t);
+        assert!(out.contains(&t.command));
+        assert!(!out.contains(&t.unknown_command));
+    }
+
+    #[test]
+    fn minimal_theme_leaves_line_plain() {
+        let t = oxide_config::theme::named("minimal").unwrap();
+        // No command/flag/string colors, so the visible text is unchanged.
+        let out = highlight_line("ls -la foo", &cmds(), &t);
+        assert_eq!(out, "ls -la foo");
     }
 
     #[test]
     fn visible_text_is_preserved() {
-        // Stripping ANSI must return the original line exactly.
         let line = "ls -la | cat > out.txt";
-        let hl = highlight_line(line, &cmds());
-        let stripped = strip_ansi(&hl);
-        assert_eq!(stripped, line);
+        let hl = highlight_line(line, &cmds(), &theme());
+        assert_eq!(strip_ansi(&hl), line);
     }
 
     fn strip_ansi(s: &str) -> String {
@@ -221,7 +243,6 @@ mod tests {
         let mut chars = s.chars();
         while let Some(c) = chars.next() {
             if c == '\x1b' {
-                // Skip until the terminating 'm' of the SGR sequence.
                 for c in chars.by_ref() {
                     if c == 'm' {
                         break;

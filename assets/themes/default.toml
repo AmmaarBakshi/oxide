@@ -1,0 +1,11 @@
+# Oxide's "default" theme — rusty-orange accent on a full palette.
+# Mirrors the built-in `default`. Use `name = "default"` under [theme] in
+# ~/.oxiderc.toml, or copy these rows to override individual roles.
+[theme]
+command         = "#B7410E"
+unknown_command = "red"
+flag            = "yellow"
+string          = "green"
+operator        = "cyan"
+hint            = "dim"
+accent          = "#B7410E"

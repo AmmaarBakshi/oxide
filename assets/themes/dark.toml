@@ -1,0 +1,11 @@
+# Oxide's "dark" theme — brighter hues tuned for dark backgrounds.
+# Mirrors the built-in `dark`. Use `name = "dark"` under [theme] in
+# ~/.oxiderc.toml, or copy these rows to override individual roles.
+[theme]
+command         = "#E8A87C"
+unknown_command = "#FF6B6B"
+flag            = "#F4D35E"
+string          = "#A3D9A5"
+operator        = "#7FD4E0"
+hint            = "dim"
+accent          = "#E8A87C"

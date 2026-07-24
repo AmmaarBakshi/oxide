@@ -544,6 +544,11 @@ version = "0.1.0"
 [[package]]
 name = "oxide-config"
 version = "0.1.0"
+dependencies = [
+ "dirs",
+ "serde",
+ "toml",
+]
 
 [[package]]
 name = "oxide-core"
@@ -553,6 +558,7 @@ dependencies = [
  "colored",
  "oxide-builtins",
  "oxide-compat",
+ "oxide-config",
  "oxide-data",
  "oxide-exec",
  "oxide-parser",
@@ -620,6 +626,7 @@ name = "oxide-ui"
 version = "0.1.0"
 dependencies = [
  "oxide-builtins",
+ "oxide-config",
  "rustyline",
 ]
 

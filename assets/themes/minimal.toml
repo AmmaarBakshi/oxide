@@ -1,0 +1,11 @@
+# Oxide's "minimal" theme — only the prompt accent and dimmed hints; the input
+# line is left uncolored. Mirrors the built-in `minimal`. Use `name = "minimal"`
+# under [theme] in ~/.oxiderc.toml.
+[theme]
+command         = "none"
+unknown_command = "none"
+flag            = "none"
+string          = "none"
+operator        = "none"
+hint            = "dim"
+accent          = "#B7410E"

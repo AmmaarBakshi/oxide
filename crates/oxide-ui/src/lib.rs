@@ -3,15 +3,17 @@
 //! This crate is the "brain" that sits on top of rustyline and provides the
 //! interactive experience: syntax highlighting of the input line, smart
 //! tab-completion (builtins + `PATH` executables + files), and fish-style
-//! history autosuggestions.
+//! history autosuggestions. Colors and the prompt template come from
+//! [`oxide_config::Config`].
 //!
 //! The entry point is [`build_editor`], which returns a fully configured
 //! rustyline `Editor` for the REPL to drive.
 
 use std::borrow::Cow;
 
+use oxide_config::{Config, PromptConfig, Theme};
 use rustyline::completion::{Completer, Pair};
-use rustyline::config::{CompletionType, Config};
+use rustyline::config::{CompletionType, Config as RlConfig};
 use rustyline::error::ReadlineError;
 use rustyline::highlight::{CmdKind, Highlighter};
 use rustyline::hint::Hinter;
@@ -35,19 +37,18 @@ pub type OxideEditor = Editor<OxideHelper, DefaultHistory>;
 pub struct OxideHelper {
     completer: OxideCompleter,
     hinter: OxideHinter,
-}
-
-impl Default for OxideHelper {
-    fn default() -> Self {
-        Self::new()
-    }
+    theme: Theme,
+    prompt: PromptConfig,
 }
 
 impl OxideHelper {
-    pub fn new() -> Self {
+    /// Build a helper from the resolved shell configuration.
+    pub fn new(config: &Config) -> Self {
         Self {
             completer: OxideCompleter::new(),
             hinter: OxideHinter::new(),
+            theme: config.theme.clone(),
+            prompt: config.prompt.clone(),
         }
     }
 }
@@ -75,7 +76,7 @@ impl Hinter for OxideHelper {
 
 impl Highlighter for OxideHelper {
     fn highlight<'l>(&self, line: &'l str, _pos: usize) -> Cow<'l, str> {
-        highlight::highlight_line(line, self.completer.commands())
+        highlight::highlight_line(line, self.completer.commands(), &self.theme)
     }
 
     fn highlight_prompt<'b, 's: 'b, 'p: 'b>(
@@ -83,11 +84,11 @@ impl Highlighter for OxideHelper {
         prompt: &'p str,
         _default: bool,
     ) -> Cow<'b, str> {
-        highlight::colorize_prompt(prompt)
+        highlight::colorize_prompt(prompt, &self.prompt.accent, &self.theme)
     }
 
     fn highlight_hint<'h>(&self, hint: &'h str) -> Cow<'h, str> {
-        Cow::Owned(highlight::colorize_hint(hint))
+        Cow::Owned(highlight::colorize_hint(hint, &self.theme))
     }
 
     /// Ask rustyline to re-highlight on every edit (but not on plain cursor
@@ -104,12 +105,12 @@ impl Helper for OxideHelper {}
 ///
 /// History is *not* auto-added; the REPL manages history explicitly so it can
 /// also mirror entries to Oxide's own history file.
-pub fn build_editor() -> rustyline::Result<OxideEditor> {
-    let config = Config::builder()
+pub fn build_editor(config: &Config) -> rustyline::Result<OxideEditor> {
+    let rl_config = RlConfig::builder()
         .completion_type(CompletionType::List)
         .auto_add_history(false)
         .build();
-    let mut editor = Editor::with_config(config)?;
-    editor.set_helper(Some(OxideHelper::new()));
+    let mut editor = Editor::with_config(rl_config)?;
+    editor.set_helper(Some(OxideHelper::new(config)));
     Ok(editor)
 }

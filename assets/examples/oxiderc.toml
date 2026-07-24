@@ -1,0 +1,28 @@
+# Oxide shell configuration.
+#
+# Copy this file to ~/.oxiderc.toml (or point $OXIDE_CONFIG at it) and edit.
+# Everything is optional — omitted values fall back to the defaults shown here,
+# and an invalid file is ignored with a warning rather than breaking the shell.
+
+[prompt]
+# Placeholders: {cwd} (working directory), {user} (username), {host} (hostname).
+template = "oxide {cwd} > "
+# Leading substring of the rendered prompt painted in the theme's accent color.
+# Set to "" to disable prompt accenting.
+accent = "oxide"
+
+[theme]
+# Start from a built-in theme: "default", "dark", or "minimal".
+name = "default"
+
+# ...then override individual roles if you like. Each color may be a name
+# (black, red, green, yellow, blue, magenta, cyan, white, dim), a truecolor
+# hex value (#RRGGBB), or "none" for no color.
+#
+# command         = "#B7410E"   # recognized command
+# unknown_command = "red"       # unrecognized command
+# flag            = "yellow"    # -flags / --flags
+# string          = "green"     # "quoted strings"
+# operator        = "cyan"      # | > >> < & && ;
+# hint            = "dim"       # autosuggestion ghost text
+# accent          = "#B7410E"   # prompt accent
