@@ -3,7 +3,7 @@ pub fn execute(args: &[String]) -> i32 {
         println!("Available built-in commands:");
         
         // One string, split by space, printed line by line
-        "alias cat cd clear echo env export find grep help history jail kill ls mode open pwd ps rm sleep source top touch unset"
+        "alias cat cd clear echo env export find grep help history jail kill ls mkdir mode open pwd ps rm sleep source top touch unset"
             .split_whitespace()
             .for_each(|cmd| println!("{}", cmd));
             

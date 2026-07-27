@@ -144,6 +144,7 @@ impl Executor {
                             *last_exit_code = 0;
                         }
                         "touch" => *last_exit_code = oxide_builtins::touch::execute(&expanded_args),
+                        "mkdir" => *last_exit_code = oxide_builtins::mkdir::execute(&expanded_args),
                         "cat" => *last_exit_code = oxide_builtins::cat::execute(&expanded_args),
                         "env" => *last_exit_code = oxide_builtins::env::execute(),
                         "history" => *last_exit_code = oxide_builtins::history::execute(history),
@@ -504,6 +505,7 @@ impl Executor {
                         *last_exit_code = 0;
                     }
                     "touch" => *last_exit_code = oxide_builtins::touch::execute(&expanded_args),
+                    "mkdir" => *last_exit_code = oxide_builtins::mkdir::execute(&expanded_args),
                     "cat" => *last_exit_code = oxide_builtins::cat::execute(&expanded_args),
                     "env" => *last_exit_code = oxide_builtins::env::execute(),
                     "history" => *last_exit_code = oxide_builtins::history::execute(history),
