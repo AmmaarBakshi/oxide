@@ -1,6 +1,8 @@
 //! Helpers for exercising builtins against in-memory streams in unit tests.
 
 use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
 
 use crate::{registry, Ctx, Io};
 
@@ -34,4 +36,13 @@ pub fn run(name: &str, args: &[&str], stdin: &str) -> Output {
         stdout: String::from_utf8(stdout).expect("stdout is UTF-8"),
         stderr: String::from_utf8(stderr).expect("stderr is UTF-8"),
     }
+}
+
+/// A fresh, empty directory for `test` under the system temp dir. Unique per
+/// test and per test-binary run, so tests can run in parallel.
+pub fn scratch_dir(test: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("oxide-builtins-{}-{}", std::process::id(), test));
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).expect("create scratch dir");
+    dir
 }

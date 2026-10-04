@@ -97,6 +97,7 @@ declare_builtins! {
     Cat    => "cat",    crate::cat::run,     "concatenate files, or stdin, to stdout";
     Cd     => "cd",     crate::cd::run,      "change the working directory";
     Clear  => "clear",  crate::clear::run,   "clear the screen and scrollback";
+    Cp     => "cp",     crate::cp::run,      "copy files and directories (-r)";
     Dir    => "dir",    crate::ls::run,      "list directory contents (alias for ls)";
     Echo   => "echo",   crate::echo::run,    "write arguments to stdout";
     Env    => "env",    crate::env::run,     "print the environment";
