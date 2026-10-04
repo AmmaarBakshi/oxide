@@ -118,6 +118,7 @@ declare_builtins! {
     Tail   => "tail",   crate::tail::run,    "print the last lines of files or stdin";
     Top    => "top",    crate::top::run,     "show the busiest processes";
     Touch  => "touch",  crate::touch::run,   "create files if they do not exist";
+    Uniq   => "uniq",   crate::uniq::run,    "collapse adjacent duplicate lines";
     Unset  => "unset",  crate::unset::run,   "remove an environment variable";
     Wc     => "wc",     crate::wc::run,      "count lines, words, and bytes";
 }
