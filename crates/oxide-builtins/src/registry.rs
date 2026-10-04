@@ -114,6 +114,7 @@ declare_builtins! {
     Pwd    => "pwd",    crate::pwd::run,     "print the working directory";
     Rm     => "rm",     crate::rm::run,      "remove files and directories";
     Sleep  => "sleep",  crate::sleep::run,   "pause for a number of seconds";
+    Sort   => "sort",   crate::sort::run,    "sort lines of files or stdin";
     Tail   => "tail",   crate::tail::run,    "print the last lines of files or stdin";
     Top    => "top",    crate::top::run,     "show the busiest processes";
     Touch  => "touch",  crate::touch::run,   "create files if they do not exist";

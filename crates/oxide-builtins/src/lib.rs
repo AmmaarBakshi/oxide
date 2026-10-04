@@ -40,6 +40,7 @@ pub mod ps;
 pub mod pwd;
 pub mod rm;
 pub mod sleep;
+pub mod sort;
 pub mod tail;
 pub mod top;
 pub mod touch;
