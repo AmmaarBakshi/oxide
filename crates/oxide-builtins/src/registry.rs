@@ -103,6 +103,7 @@ declare_builtins! {
     Export => "export", crate::export::run,  "set an environment variable (KEY=VALUE)";
     Find   => "find",   crate::find::run,    "search a directory tree for matching names";
     Grep   => "grep",   crate::grep::run,    "print lines matching a pattern";
+    Head   => "head",   crate::head::run,    "print the first lines of files or stdin";
     Help   => "help",   crate::help::run,    "list the built-in commands";
     Hist   => "history", crate::history::run, "show the command history";
     Kill   => "kill",   crate::kill::run,    "terminate a process by PID";

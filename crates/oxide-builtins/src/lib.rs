@@ -28,6 +28,7 @@ pub mod env;
 pub mod export;
 pub mod find;
 pub mod grep;
+pub mod head;
 pub mod help;
 pub mod history;
 pub mod kill;
@@ -41,6 +42,9 @@ pub mod sleep;
 pub mod top;
 pub mod touch;
 pub mod unset;
+
+#[cfg(test)]
+mod test_support;
 
 pub use io::Io;
 pub use registry::{registry, Builtin, Registry};
