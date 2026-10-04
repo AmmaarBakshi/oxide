@@ -1,8 +1,10 @@
 use std::fs;
 
-pub fn execute(args: &[String]) -> i32 {
+use crate::{Ctx, Io};
+
+pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
     if args.is_empty() {
-        eprintln!("oxide: mkdir: missing operand (e.g., 'mkdir dir' or 'mkdir -p a/b/c')");
+        ewln!(io, "oxide: mkdir: missing operand (e.g., 'mkdir dir' or 'mkdir -p a/b/c')");
         return 1;
     }
 
@@ -12,7 +14,7 @@ pub fn execute(args: &[String]) -> i32 {
     let dirs: Vec<&String> = args.iter().filter(|a| !a.starts_with('-')).collect();
 
     if dirs.is_empty() {
-        eprintln!("oxide: mkdir: missing operand");
+        ewln!(io, "oxide: mkdir: missing operand");
         return 1;
     }
 
@@ -24,7 +26,7 @@ pub fn execute(args: &[String]) -> i32 {
             fs::create_dir(dir)
         };
         if let Err(e) = result {
-            eprintln!("oxide: mkdir: cannot create directory '{}': {}", dir, e);
+            ewln!(io, "oxide: mkdir: cannot create directory '{}': {}", dir, e);
             status = 1;
         }
     }

@@ -1,24 +1,8 @@
-use std::fs::File;
-use std::io::Write;
+use crate::{Ctx, Io};
 
-pub fn execute(args: &[String], outfile: &Option<String>) -> i32 {
-    let text = args.join(" ");
-
-    // If the user typed `> file.txt`, write to the file!
-    if let Some(file_name) = outfile {
-        match File::create(file_name) {
-            Ok(mut file) => {
-                let _ = writeln!(file, "{}", text);
-                0
-            }
-            Err(e) => {
-                eprintln!("oxide: echo: failed to write to '{}': {}", file_name, e);
-                1
-            }
-        }
-    } else {
-        // Otherwise, print to the console normally
-        println!("{}", text);
-        0
-    }
+pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
+    // Redirection (`> file`, `>> file`) is applied by the caller when it
+    // builds `io`, so echo only ever has to write one line.
+    wln!(io, "{}", args.join(" "));
+    0
 }

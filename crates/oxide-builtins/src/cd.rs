@@ -1,7 +1,9 @@
 use std::env;
 use std::path::PathBuf;
 
-pub fn execute(args: &[String]) -> i32 {
+use crate::{Ctx, Io};
+
+pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
     // 1. Determine the target directory
     let target = if args.is_empty() {
         // Fallback to ~ (Home) if no args are provided
@@ -23,11 +25,11 @@ pub fn execute(args: &[String]) -> i32 {
             if let Ok(new_pwd) = env::current_dir() {
                 env::set_var("PWD", new_pwd);
             }
-            0 // Success
+            0
         }
         Err(e) => {
-            eprintln!("oxide: cd: {}: {}", target.display(), e);
-            1 // Error
+            ewln!(io, "oxide: cd: {}: {}", target.display(), e);
+            1
         }
     }
 }

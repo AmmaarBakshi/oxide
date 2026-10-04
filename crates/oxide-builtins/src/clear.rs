@@ -1,16 +1,12 @@
-use std::io::{self, Write};
+use crate::{Ctx, Io};
 
-pub fn execute(_args: &[String]) -> i32 {
-    let mut stdout = io::stdout();
-
+pub fn run(_args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
     // Clear screen + clear scrollback/history + move cursor to top-left
-    if write!(stdout, "\x1B[3J\x1B[2J\x1B[H").is_err() {
+    if io.stdout.write_all(b"\x1B[3J\x1B[2J\x1B[H").is_err() {
         return 1;
     }
-
-    if stdout.flush().is_err() {
+    if io.stdout.flush().is_err() {
         return 1;
     }
-
     0
 }

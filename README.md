@@ -27,15 +27,14 @@ A custom, high-performance shell written entirely in **Rust**. Oxide builds a co
 ### Implemented
 - ✅ **Custom Lexing & Parsing** — Accurately tokenizes and parses strings, arguments, and shell operators
 - ✅ **Process Execution** — Spawns and manages OS-level child processes efficiently
-- ✅ **Built-in Commands** — Native interception for commands that modify shell state (`cd`, `echo`, etc.)
-- ✅ **Redirection** — Output truncate (`>`), append (`>>`), and input (`<`) redirects (e.g., `sort < in.txt >> out.txt`)
-- ✅ **Piping (`|`)** — Chain external commands, streaming stdout into the next command's stdin (e.g., `where cargo | sort | findstr rustup`)
+- ✅ **Built-in Commands** — Native interception for commands that modify shell state (`cd`, `echo`, etc.), registered in one table so dispatch, completion, and `help` never drift apart
+- ✅ **Redirection** — Output truncate (`>`), append (`>>`), and input (`<`) redirects, honored by built-ins and external commands alike (e.g., `ls > files.txt`, `grep hello < in.txt`)
+- ✅ **Piping (`|`)** — Chain any mix of built-ins and external commands (e.g., `ls | grep .rs`, `where cargo | sort | findstr rustup`). Process-to-process links are real OS pipes; a built-in stage reads its upstream and hands its output to the next
 - ✅ **Variable Expansion** — `$VAR`, `${VAR}`, and `~` (home) expansion in arguments
 - ✅ **Dynamic Prompt** — Real-time tracking and display of the current working directory
 - ✅ **Modular Architecture** — Cleanly decoupled components for easy extension
 
 ### Planned
-- 🔄 Piping through built-ins (currently external commands only)
 - 🔄 Command history and autocompletion
 - 🔄 Script execution
 

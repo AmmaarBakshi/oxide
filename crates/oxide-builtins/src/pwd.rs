@@ -1,14 +1,16 @@
 use std::env;
 
-pub fn execute(_args: &[String]) -> i32 {
+use crate::{Ctx, Io};
+
+pub fn run(_args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
     match env::current_dir() {
         Ok(dir) => {
-            println!("{}", dir.display());
-            0 // Success
+            wln!(io, "{}", dir.display());
+            0
         }
         Err(e) => {
-            eprintln!("oxide: pwd: {}", e);
-            1 // Error
+            ewln!(io, "oxide: pwd: {}", e);
+            1
         }
     }
 }

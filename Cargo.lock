@@ -534,6 +534,7 @@ dependencies = [
  "oxide-config",
  "oxide-core",
  "oxide-exec",
+ "oxide-perf",
  "oxide-ui",
 ]
 

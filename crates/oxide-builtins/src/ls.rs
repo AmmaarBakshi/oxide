@@ -2,7 +2,9 @@ use std::env;
 use std::fs;
 use std::path::Path;
 
-pub fn execute(args: &[String]) -> i32 {
+use crate::{Ctx, Io};
+
+pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
     // 1. Separate flags (starting with '-') from paths
     let flags: Vec<&String> = args.iter().filter(|a| a.starts_with('-')).collect();
     let paths: Vec<&String> = args.iter().filter(|a| !a.starts_with('-')).collect();
@@ -20,18 +22,18 @@ pub fn execute(args: &[String]) -> i32 {
         Ok(entries) => {
             for entry in entries.flatten() {
                 let name = entry.file_name().to_string_lossy().to_string();
-                
+
                 // 3. Apply flag logic: skip hidden files unless -a is present
                 if !show_all && name.starts_with('.') {
                     continue;
                 }
 
-                println!("{}", name);
+                wln!(io, "{}", name);
             }
             0
         }
         Err(e) => {
-            eprintln!("oxide: ls: cannot access '{}': {}", target_dir.display(), e);
+            ewln!(io, "oxide: ls: cannot access '{}': {}", target_dir.display(), e);
             1
         }
     }

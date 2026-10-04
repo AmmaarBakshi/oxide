@@ -1,8 +1,10 @@
 use std::process::Command;
 
-pub fn execute(args: &[String]) -> i32 {
+use crate::{Ctx, Io};
+
+pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
     if args.is_empty() {
-        eprintln!("oxide: kill: missing process ID (PID)");
+        ewln!(io, "oxide: kill: missing process ID (PID)");
         return 1;
     }
 
@@ -20,17 +22,21 @@ pub fn execute(args: &[String]) -> i32 {
     #[cfg(not(target_os = "windows"))]
     cmd.arg("-9").arg(pid);
 
-    match cmd.status() {
-        Ok(status) => {
-            if status.success() {
-                println!("oxide: process {} terminated.", pid);
+    // Capture rather than inherit, so the helper's output lands on our `io`
+    // streams and stays inside a redirect or pipeline.
+    match cmd.output() {
+        Ok(output) => {
+            let _ = io.stderr.write_all(&output.stderr);
+            if output.status.success() {
+                wln!(io, "oxide: process {} terminated.", pid);
                 0
             } else {
+                let _ = io.stdout.write_all(&output.stdout);
                 1
             }
         }
         Err(e) => {
-            eprintln!("oxide: kill: failed to execute: {}", e);
+            ewln!(io, "oxide: kill: failed to execute: {}", e);
             1
         }
     }

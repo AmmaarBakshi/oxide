@@ -90,11 +90,14 @@ fn in_command_position(line: &str, start: usize) -> bool {
 }
 
 /// Builtins plus every executable name found on `PATH`, sorted and deduped.
+///
+/// The builtin half comes from `oxide_builtins::all_names()`, which is derived
+/// from the registry itself — so a newly added builtin is completable and
+/// highlighted without anyone remembering to update a list here.
 fn collect_commands() -> Vec<String> {
     let mut set: BTreeSet<String> = BTreeSet::new();
-    set.insert("exit".to_string());
-    for name in oxide_builtins::NAMES {
-        set.insert((*name).to_string());
+    for name in oxide_builtins::all_names() {
+        set.insert(name.to_string());
     }
     collect_path_executables(&mut set);
     set.into_iter().collect()

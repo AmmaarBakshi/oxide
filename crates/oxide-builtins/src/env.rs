@@ -1,6 +1,8 @@
-pub fn execute() -> i32 {
+use crate::{Ctx, Io};
+
+pub fn run(_args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
     for (key, value) in std::env::vars() {
-        println!("{}={}", key, value);
+        wln!(io, "{}={}", key, value);
     }
     0
 }

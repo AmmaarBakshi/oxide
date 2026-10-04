@@ -1,16 +1,23 @@
 use std::fs::{File, OpenOptions};
 use std::process::{Command, Stdio};
 
-/// Hooks up an output redirect. When `append` is true the file is opened in
-/// append mode (`>>`); otherwise it is truncated/created (`>`).
+/// Opens a `>` / `>>` target. When `append` is true the file is opened in
+/// append mode; otherwise it is truncated/created.
+///
+/// Shared by process spawning and by builtins, so both honor a redirect the
+/// same way.
+pub fn open_output(path: &str, append: bool) -> std::io::Result<File> {
+    if append {
+        OpenOptions::new().create(true).append(true).open(path)
+    } else {
+        File::create(path)
+    }
+}
+
+/// Hooks up an output redirect on a child process.
 pub fn apply_output(process: &mut Command, outfile: &Option<String>, append: bool) {
     if let Some(path) = outfile {
-        let opened = if append {
-            OpenOptions::new().create(true).append(true).open(path)
-        } else {
-            File::create(path)
-        };
-        match opened {
+        match open_output(path, append) {
             Ok(file) => {
                 process.stdout(Stdio::from(file));
             }
