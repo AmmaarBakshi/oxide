@@ -110,6 +110,7 @@ declare_builtins! {
     Kill   => "kill",   crate::kill::run,    "terminate a process by PID";
     Ls     => "ls",     crate::ls::run,      "list directory contents";
     Mkdir  => "mkdir",  crate::mkdir::run,   "create directories";
+    Mv     => "mv",     crate::mv::run,      "move or rename files and directories";
     Open   => "open",   crate::open::run,    "read a file, parsing JSON and CSV structurally";
     Ps     => "ps",     crate::ps::run,      "list running processes";
     Pwd    => "pwd",    crate::pwd::run,     "print the working directory";
