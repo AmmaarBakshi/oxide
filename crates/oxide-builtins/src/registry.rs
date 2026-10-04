@@ -123,6 +123,7 @@ declare_builtins! {
     Uniq   => "uniq",   crate::uniq::run,    "collapse adjacent duplicate lines";
     Unset  => "unset",  crate::unset::run,   "remove an environment variable";
     Wc     => "wc",     crate::wc::run,      "count lines, words, and bytes";
+    Which  => "which",  crate::which::run,   "show what a command name runs (-a for all)";
 }
 
 /// The process-wide builtin registry, built once on first use.

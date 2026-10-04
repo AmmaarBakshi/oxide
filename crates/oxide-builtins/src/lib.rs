@@ -49,6 +49,7 @@ pub mod touch;
 pub mod uniq;
 pub mod unset;
 pub mod wc;
+pub mod which;
 
 #[cfg(test)]
 mod test_support;
