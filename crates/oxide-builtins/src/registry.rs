@@ -118,6 +118,7 @@ declare_builtins! {
     Top    => "top",    crate::top::run,     "show the busiest processes";
     Touch  => "touch",  crate::touch::run,   "create files if they do not exist";
     Unset  => "unset",  crate::unset::run,   "remove an environment variable";
+    Wc     => "wc",     crate::wc::run,      "count lines, words, and bytes";
 }
 
 /// The process-wide builtin registry, built once on first use.

@@ -15,6 +15,7 @@ use std::collections::HashMap;
 #[macro_use]
 mod macros;
 
+mod args;
 pub mod io;
 pub mod registry;
 
@@ -43,6 +44,7 @@ pub mod tail;
 pub mod top;
 pub mod touch;
 pub mod unset;
+pub mod wc;
 
 #[cfg(test)]
 mod test_support;
