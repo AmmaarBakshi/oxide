@@ -20,14 +20,18 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
 
     match fs::read_dir(&target_dir) {
         Ok(entries) => {
-            for entry in entries.flatten() {
-                let name = entry.file_name().to_string_lossy().to_string();
-
+            let mut names: Vec<String> = entries
+                .flatten()
+                .map(|entry| entry.file_name().to_string_lossy().into_owned())
                 // 3. Apply flag logic: skip hidden files unless -a is present
-                if !show_all && name.starts_with('.') {
-                    continue;
-                }
+                .filter(|name| show_all || !name.starts_with('.'))
+                .collect();
 
+            // 4. read_dir order is up to the filesystem, so sort for stable
+            // output. Case-insensitive, so `Cargo.toml` sits beside `crates`.
+            names.sort_by_cached_key(|name| name.to_lowercase());
+
+            for name in names {
                 wln!(io, "{}", name);
             }
             0
