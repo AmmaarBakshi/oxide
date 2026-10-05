@@ -1,47 +1,40 @@
-use std::fs;
+use std::io;
 
 use crate::{Ctx, Io};
 
 pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
-    // No operands means "copy stdin through", which is what makes
+    // No operands (or `-`) means "copy stdin through", which is what makes
     // `cat < in.txt | grep foo` and a bare `cat` in a pipeline work.
-    if args.is_empty() {
-        return copy_stdin(io);
-    }
-
-    for path in args {
-        match fs::read_to_string(path) {
-            Ok(content) => {
-                if io.stdout.write_all(content.as_bytes()).is_err() {
-                    return 1;
-                }
-            }
-            Err(e) => {
-                ewln!(io, "cat: {}: {}", path, e);
-                return 1;
-            }
-        }
-    }
-    0
+    //
+    // `io::copy` forwards each chunk as soon as it's read, so a long-running
+    // upstream stage shows up as it arrives, large files never sit whole in
+    // memory, and bytes that aren't valid UTF-8 pass through untouched.
+    let files: Vec<&str> = args.iter().map(String::as_str).collect();
+    io.each_input("cat", &files, |_, input, out| io::copy(input, out).map(drop))
 }
 
-/// Streams stdin to stdout a line at a time, so a long-running upstream
-/// stage shows up as it arrives rather than only at EOF.
-fn copy_stdin(io: &mut Io<'_>) -> i32 {
-    let mut line = String::new();
-    loop {
-        line.clear();
-        match io.stdin.read_line(&mut line) {
-            Ok(0) => return 0,
-            Ok(_) => {
-                if io.stdout.write_all(line.as_bytes()).is_err() {
-                    return 1;
-                }
-            }
-            Err(e) => {
-                ewln!(io, "cat: {}", e);
-                return 1;
-            }
-        }
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use crate::test_support::{run, scratch_dir};
+
+    #[test]
+    fn copies_stdin_through() {
+        assert_eq!(run("cat", &[], "a\nb").stdout, "a\nb");
+        assert_eq!(run("cat", &["-"], "piped\n").stdout, "piped\n");
+    }
+
+    #[test]
+    fn a_missing_file_does_not_stop_the_rest() {
+        let dir = scratch_dir("cat_missing");
+        let (a, missing) = (dir.join("a.txt"), dir.join("missing.txt"));
+        fs::write(&a, "from a\n").unwrap();
+
+        let out = run("cat", &[missing.to_str().unwrap(), a.to_str().unwrap()], "");
+        assert_eq!(out.status, 1);
+        assert_eq!(out.stdout, "from a\n");
+        assert!(out.stderr.starts_with("cat: "));
+        fs::remove_dir_all(dir).unwrap();
     }
 }
