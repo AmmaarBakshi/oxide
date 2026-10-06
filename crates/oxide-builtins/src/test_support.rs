@@ -15,15 +15,26 @@ pub struct Output {
 
 /// Runs the registered builtin `name` with `args`, feeding it `stdin`.
 pub fn run(name: &str, args: &[&str], stdin: &str) -> Output {
-    run_in(name, args, stdin, &[])
+    run_in(name, args, stdin, &[], &[])
 }
 
 /// Like [`run`] with no stdin, but with `aliases` defined in the shell.
 pub fn run_with_aliases(name: &str, args: &[&str], aliases: &[(&str, &str)]) -> Output {
-    run_in(name, args, "", aliases)
+    run_in(name, args, "", aliases, &[])
 }
 
-fn run_in(name: &str, args: &[&str], stdin: &str, aliases: &[(&str, &str)]) -> Output {
+/// Like [`run`] with no stdin, but with `history` as the session so far.
+pub fn run_with_history(name: &str, args: &[&str], history: &[&str]) -> Output {
+    run_in(name, args, "", &[], history)
+}
+
+fn run_in(
+    name: &str,
+    args: &[&str],
+    stdin: &str,
+    aliases: &[(&str, &str)],
+    history: &[&str],
+) -> Output {
     let builtin = registry().get(name).expect("builtin is registered");
     let args: Vec<String> = args.iter().map(|a| a.to_string()).collect();
 
@@ -33,9 +44,10 @@ fn run_in(name: &str, args: &[&str], stdin: &str, aliases: &[(&str, &str)]) -> O
         .iter()
         .map(|(name, value)| (name.to_string(), value.to_string()))
         .collect();
+    let history: Vec<String> = history.iter().map(|cmd| cmd.to_string()).collect();
     let mut ctx = Ctx {
         aliases: &mut aliases,
-        history: &[],
+        history: &history,
     };
 
     let status = {
