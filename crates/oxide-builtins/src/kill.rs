@@ -8,8 +8,21 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
         return 1;
     }
 
-    let pid = &args[0];
+    // Only plain numbers. Each PID is handed to taskkill/kill, so anything
+    // else could be read there as an option (`kill /IM explorer.exe`).
+    if let Some(bad) = args.iter().find(|pid| pid.parse::<u32>().is_err()) {
+        ewln!(io, "oxide: kill: invalid process ID '{}'", bad);
+        return 1;
+    }
 
+    let mut status = 0;
+    for pid in args {
+        status |= kill_one(pid, io);
+    }
+    status
+}
+
+fn kill_one(pid: &str, io: &mut Io<'_>) -> i32 {
     // Windows uses taskkill
     #[cfg(target_os = "windows")]
     let mut cmd = Command::new("taskkill");
@@ -38,6 +51,20 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
         Err(e) => {
             ewln!(io, "oxide: kill: failed to execute: {}", e);
             1
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::test_support::run;
+
+    #[test]
+    fn rejects_anything_but_numeric_pids() {
+        for args in [&["abc"][..], &["/IM", "explorer.exe"], &["-9"], &["123", "x"]] {
+            let out = run("kill", args, "");
+            assert_eq!(out.status, 1, "args: {:?}", args);
+            assert!(out.stderr.contains("invalid process ID"), "args: {:?}", args);
         }
     }
 }
