@@ -4,13 +4,21 @@ use std::path::PathBuf;
 use crate::{Ctx, Io};
 
 pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
+    let back = args.first().map(String::as_str) == Some("-");
+
     // 1. Determine the target directory
     let target = if args.is_empty() {
         // Fallback to ~ (Home) if no args are provided
         dirs::home_dir().unwrap_or_else(|| PathBuf::from("."))
-    } else if args[0] == "-" {
-        // Fallback to previous directory if `cd -` is used
-        PathBuf::from(env::var("OLDPWD").unwrap_or_else(|_| ".".to_string()))
+    } else if back {
+        // `cd -` returns to the previous directory, if there is one
+        match env::var("OLDPWD") {
+            Ok(old) => PathBuf::from(old),
+            Err(_) => {
+                ewln!(io, "oxide: cd: OLDPWD not set");
+                return 1;
+            }
+        }
     } else {
         PathBuf::from(&args[0])
     };
@@ -23,7 +31,12 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
             // 3. Update the environment variables upon success
             env::set_var("OLDPWD", current_pwd);
             if let Ok(new_pwd) = env::current_dir() {
-                env::set_var("PWD", new_pwd);
+                env::set_var("PWD", &new_pwd);
+                // Like bash, `cd -` says where it landed, since it isn't
+                // visible in the command itself.
+                if back {
+                    wln!(io, "{}", new_pwd.display());
+                }
             }
             0
         }
