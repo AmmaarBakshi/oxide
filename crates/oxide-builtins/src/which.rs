@@ -2,7 +2,7 @@ use std::env;
 use std::path::{self, Path, PathBuf};
 
 use crate::args::parse_flags;
-use crate::{registry, Ctx, Io, EXECUTOR_BUILTINS, REPL_BUILTINS};
+use crate::{registry, Ctx, Io, EXECUTOR_BUILTINS};
 
 pub fn run(args: &[String], io: &mut Io<'_>, ctx: &mut Ctx<'_>) -> i32 {
     let (flags, names) = match parse_flags(args, "a") {
@@ -47,7 +47,7 @@ pub fn run(args: &[String], io: &mut Io<'_>, ctx: &mut Ctx<'_>) -> i32 {
 }
 
 fn is_builtin(name: &str) -> bool {
-    registry().contains(name) || EXECUTOR_BUILTINS.contains(&name) || REPL_BUILTINS.contains(&name)
+    registry().contains(name) || EXECUTOR_BUILTINS.contains(&name)
 }
 
 /// The executables `name` resolves to, in search order — only the first

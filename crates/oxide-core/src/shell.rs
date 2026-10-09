@@ -7,6 +7,8 @@ use std::collections::HashMap; // <-- 1. Import it
 pub struct ShellState {
     pub is_running: bool,
     pub last_exit_code: i32,
+    /// The status passed to `exit`, once it has run.
+    pub exit_status: Option<i32>,
     pub aliases: HashMap<String, String>,
     pub mode: CompatMode,
     pub job_manager: JobManager,
@@ -25,6 +27,7 @@ impl ShellState {
         Self {
             is_running: true,
             last_exit_code: 0,
+            exit_status: None,
             aliases: HashMap::new(),
             mode: CompatMode::Oxide,
             job_manager: JobManager::new(),

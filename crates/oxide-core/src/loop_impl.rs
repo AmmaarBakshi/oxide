@@ -39,10 +39,6 @@ impl Shell {
                         continue;
                     }
                     rl.add_history_entry(trimmed)?;
-                    if trimmed == "exit" {
-                        self.state.is_running = false;
-                        break;
-                    }
                     self.state.history.push(trimmed.to_string());
                     history::append(trimmed);
                     self.execute_line(trimmed);
@@ -94,15 +90,15 @@ impl Shell {
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }
-            if trimmed == "exit" {
-                break;
-            }
 
             if record_history {
                 self.state.history.push(trimmed.to_string());
                 history::append(trimmed);
             }
             self.execute_line(trimmed);
+            if !self.state.is_running {
+                break;
+            }
         }
     }
 
@@ -134,5 +130,10 @@ impl Shell {
             &self.state.history,
             &mut self.state.command_cache,
         );
+
+        if let Some(status) = executor.exit_status {
+            self.state.exit_status = Some(status);
+            self.state.is_running = false;
+        }
     }
 }

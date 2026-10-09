@@ -77,20 +77,16 @@ pub struct Ctx<'a> {
 /// depending on `oxide-exec`. `oxide-exec` has a test asserting it really
 /// handles every name in this list.
 pub const EXECUTOR_BUILTINS: &[&str] = &[
-    "call", "import", "jail", "jobs", "mode", "refresh", "source",
+    "call", "exit", "import", "jail", "jobs", "mode", "refresh", "source",
 ];
 
-/// Builtins the REPL intercepts before the executor ever sees them.
-pub const REPL_BUILTINS: &[&str] = &["exit"];
-
-/// Every name Oxide handles internally, from all three tiers.
+/// Every name Oxide handles internally, from both tiers.
 ///
 /// Derived from the registry rather than hand-maintained, so completion and
 /// highlighting cannot drift out of sync with what actually runs.
 pub fn all_names() -> Vec<&'static str> {
     let mut names: Vec<&'static str> = registry().names().collect();
     names.extend_from_slice(EXECUTOR_BUILTINS);
-    names.extend_from_slice(REPL_BUILTINS);
     names.sort_unstable();
     names
 }
@@ -100,11 +96,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn all_names_covers_all_three_tiers() {
+    fn all_names_covers_both_tiers() {
         let names = all_names();
         assert!(names.contains(&"ls"), "registry tier missing");
         assert!(names.contains(&"jobs"), "executor tier missing");
-        assert!(names.contains(&"exit"), "repl tier missing");
+        assert!(names.contains(&"exit"), "exit is not advertised");
     }
 
     #[test]

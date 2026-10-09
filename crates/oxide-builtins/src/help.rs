@@ -1,4 +1,4 @@
-use crate::{registry, Ctx, Io, EXECUTOR_BUILTINS, REPL_BUILTINS};
+use crate::{registry, Ctx, Io, EXECUTOR_BUILTINS};
 
 pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
     // Detailed help for each command named. An unknown name is reported but
@@ -8,9 +8,7 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
         for name in args {
             match registry().get(name) {
                 Some(builtin) => wln!(io, "{} — {}", builtin.name(), builtin.help()),
-                None if EXECUTOR_BUILTINS.contains(&name.as_str())
-                    || REPL_BUILTINS.contains(&name.as_str()) =>
-                {
+                None if EXECUTOR_BUILTINS.contains(&name.as_str()) => {
                     wln!(
                         io,
                         "{} — built in to the shell; no detailed help yet.",
@@ -34,7 +32,6 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
 
     wln!(io, "");
     wln!(io, "Also built in: {}", EXECUTOR_BUILTINS.join(", "));
-    wln!(io, "              {}", REPL_BUILTINS.join(", "));
     0
 }
 

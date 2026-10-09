@@ -27,6 +27,9 @@ use crate::pipeline::{builtin_sink, spawn_stage, Upstream};
 pub struct Executor {
     pub runtime: oxide_script::runtime::Runtime,
     pub script_scope: oxide_script::scope::Scope,
+    /// Set by `exit`: the status the shell should exit with. Once it is set
+    /// nothing else runs, however deeply nested the `exit` was.
+    pub exit_status: Option<i32>,
 }
 
 /// The shell state a command runs against.
@@ -54,6 +57,7 @@ pub struct ExecEnv<'a> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ExecutorBuiltin {
     Call,
+    Exit,
     Import,
     Jail,
     Jobs,
@@ -66,6 +70,7 @@ impl ExecutorBuiltin {
     fn lookup(name: &str) -> Option<Self> {
         Some(match name {
             "call" => Self::Call,
+            "exit" => Self::Exit,
             "import" => Self::Import,
             "jail" => Self::Jail,
             "jobs" => Self::Jobs,
@@ -88,6 +93,7 @@ impl Executor {
         Self {
             runtime: oxide_script::runtime::Runtime::new(),
             script_scope: oxide_script::scope::Scope::new(),
+            exit_status: None,
         }
     }
 
@@ -160,6 +166,10 @@ impl Executor {
         let exec_timer = oxide_perf::profiler::Profiler::start();
 
         for exec in &executables {
+            if self.exit_status.is_some() {
+                break;
+            }
+
             // --- LOGIC GATES (&& and ||) ---
             match exec.condition {
                 Condition::And => {
@@ -183,6 +193,9 @@ impl Executor {
 
     fn execute_statements(&mut self, statements: &[Statement], env: &mut ExecEnv<'_>) {
         for statement in statements {
+            if self.exit_status.is_some() {
+                return;
+            }
             self.execute_statement(statement, env);
         }
     }
@@ -212,7 +225,7 @@ impl Executor {
                 }
             }
             Statement::While { condition, body } => {
-                while self.evaluate_if_condition(condition) {
+                while self.exit_status.is_none() && self.evaluate_if_condition(condition) {
                     self.execute_statements(body, env);
                 }
             }
@@ -225,6 +238,9 @@ impl Executor {
                     // Expand variables (e.g. $VAR) and globs (e.g. *.txt)
                     let expanded_val = oxide_parser::expand::expand_text(val);
                     for final_val in oxide_parser::glob::expand_glob(&expanded_val) {
+                        if self.exit_status.is_some() {
+                            return;
+                        }
                         std::env::set_var(variable, &final_val);
                         self.execute_statements(body, env);
                     }
@@ -342,6 +358,26 @@ impl Executor {
                     }
                 }
                 0
+            }
+
+            ExecutorBuiltin::Exit => {
+                let status = match args {
+                    [] => *env.last_exit_code,
+                    // As in bash, the status wraps at 256: `exit -1` is 255.
+                    [code] => match code.parse::<i64>() {
+                        Ok(n) => (n & 0xff) as i32,
+                        Err(_) => {
+                            eprintln!("oxide: exit: {}: numeric argument required", code);
+                            2
+                        }
+                    },
+                    _ => {
+                        eprintln!("oxide: exit: too many arguments");
+                        return 1;
+                    }
+                };
+                self.exit_status = Some(status);
+                status
             }
 
             ExecutorBuiltin::Jobs => {

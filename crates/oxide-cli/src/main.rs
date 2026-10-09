@@ -55,19 +55,21 @@ fn main() -> Result<ExitCode> {
         }
     };
 
+    let mut shell = Shell::new();
     match action {
         Action::Help => print!("{}", USAGE),
         Action::Version => println!("oxide {}", env!("CARGO_PKG_VERSION")),
         Action::Command(command) => {
-            let status = Shell::new().run_command(&command);
+            let status = shell.run_command(&command);
             return Ok(ExitCode::from(status as u8));
         }
-        Action::Script(path) => Shell::new().run_script(&path)?,
-        Action::Repl if std::io::stdin().is_terminal() => Shell::new().run_repl()?,
-        Action::Repl => Shell::new().run_stdin()?,
+        Action::Script(path) => shell.run_script(&path)?,
+        Action::Repl if std::io::stdin().is_terminal() => shell.run_repl()?,
+        Action::Repl => shell.run_stdin()?,
     }
 
-    Ok(ExitCode::SUCCESS)
+    let status = shell.state.exit_status.unwrap_or(0);
+    Ok(ExitCode::from(status as u8))
 }
 
 #[cfg(test)]
