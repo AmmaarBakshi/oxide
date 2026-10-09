@@ -60,20 +60,6 @@ impl<'a> Lexer<'a> {
                     self.input.next();
                     tokens.push(Token::RedirectIn);
                 }
-                // Handle Quoted Strings (keeps spaces intact!)
-                '"' | '\'' => {
-                    let quote_type = self.input.next().unwrap(); // consume the opening quote
-                    let mut word = String::new();
-
-                    while let Some(&next_c) = self.input.peek() {
-                        if next_c == quote_type {
-                            self.input.next(); // consume the closing quote
-                            break;
-                        }
-                        word.push(self.input.next().unwrap());
-                    }
-                    tokens.push(Token::Word(word));
-                }
                 ';' => {
                     self.input.next();
                     tokens.push(Token::Newline);
@@ -86,34 +72,119 @@ impl<'a> Lexer<'a> {
                     self.input.next();
                     tokens.push(Token::RBrace);
                 }
-                // Handle normal words (commands, flags, paths)
+                // Everything else starts a word: a command, flag or path.
                 _ => {
-                    let mut word = String::new();
-                    while let Some(&next_c) = self.input.peek() {
-                        // Keep a `${...}` expansion intact even though `{`/`}` are
-                        // otherwise block delimiters — it belongs to this word.
-                        if next_c == '$' {
-                            word.push(self.input.next().unwrap()); // consume '$'
-                            if self.input.peek() == Some(&'{') {
-                                word.push(self.input.next().unwrap()); // consume '{'
-                                while let Some(&b) = self.input.peek() {
-                                    word.push(self.input.next().unwrap());
-                                    if b == '}' {
-                                        break;
-                                    }
-                                }
-                            }
-                            continue;
-                        }
-                        if next_c.is_whitespace() || "><|&\"';{}".contains(next_c) {
-                            break;
-                        }
-                        word.push(self.input.next().unwrap());
+                    let word = self.word();
+                    // A backslash-newline on its own reads as nothing.
+                    if !word.is_empty() {
+                        tokens.push(Token::Word(word));
                     }
-                    tokens.push(Token::Word(word));
                 }
             }
         }
         tokens
+    }
+
+    /// Reads one word, keeping its quotes and backslashes as written. They
+    /// are interpreted later, when the word is expanded; keeping them is what
+    /// lets `NAME="two words"` stay a single word and `'$HOME'` stay literal.
+    fn word(&mut self) -> String {
+        let mut word = String::new();
+        while let Some(&c) = self.input.peek() {
+            match c {
+                '\'' | '"' => self.quoted(c, &mut word),
+                '\\' => {
+                    self.input.next();
+                    match self.input.next() {
+                        // A backslash-newline joins two lines into one.
+                        Some('\n') => {}
+                        Some(next) => {
+                            word.push('\\');
+                            word.push(next);
+                        }
+                        None => word.push('\\'),
+                    }
+                }
+                // Keep a `${...}` expansion intact even though `{`/`}` are
+                // otherwise block delimiters — it belongs to this word.
+                '$' => {
+                    word.push(c);
+                    self.input.next();
+                    if self.input.peek() == Some(&'{') {
+                        for b in self.input.by_ref() {
+                            word.push(b);
+                            if b == '}' {
+                                break;
+                            }
+                        }
+                    }
+                }
+                c if c.is_whitespace() || "><|&;{}".contains(c) => break,
+                _ => {
+                    word.push(c);
+                    self.input.next();
+                }
+            }
+        }
+        word
+    }
+
+    /// Copies a quoted section onto `word`, opening and closing quotes
+    /// included. An unterminated quote runs to the end of the input.
+    fn quoted(&mut self, quote: char, word: &mut String) {
+        word.push(quote);
+        self.input.next();
+        while let Some(c) = self.input.next() {
+            word.push(c);
+            if c == quote {
+                break;
+            }
+            // Inside double quotes a backslash can escape the closing quote.
+            if c == '\\' && quote == '"' {
+                if let Some(next) = self.input.next() {
+                    word.push(next);
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn words(input: &str) -> Vec<Token> {
+        Lexer::new(input).tokenize()
+    }
+
+    fn word(text: &str) -> Token {
+        Token::Word(text.to_string())
+    }
+
+    #[test]
+    fn quotes_stay_inside_the_word() {
+        assert_eq!(
+            words("echo \"a b\"c 'd e'"),
+            [word("echo"), word("\"a b\"c"), word("'d e'")]
+        );
+        assert_eq!(words("NAME=\"two words\""), [word("NAME=\"two words\"")]);
+    }
+
+    #[test]
+    fn operators_inside_quotes_are_text() {
+        assert_eq!(words("echo 'a | b; c'"), [word("echo"), word("'a | b; c'")]);
+    }
+
+    #[test]
+    fn backslash_keeps_a_separator_in_the_word() {
+        assert_eq!(words("touch a\\ b"), [word("touch"), word("a\\ b")]);
+    }
+
+    #[test]
+    fn backslash_newline_joins_lines() {
+        assert_eq!(
+            words("echo a \\\n  b"),
+            [word("echo"), word("a"), word("b")]
+        );
     }
 }

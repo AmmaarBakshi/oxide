@@ -17,6 +17,7 @@ use std::io::Write;
 use oxide_builtins::{Ctx, Io};
 use oxide_compat::CompatMode;
 use oxide_parser::ast::{Command, Condition, Statement};
+use oxide_parser::expand::{expand_string, expand_word};
 use oxide_parser::lexer::Lexer;
 use oxide_parser::parser::Parser;
 use oxide_perf::cache::CommandCache;
@@ -243,8 +244,7 @@ impl Executor {
                 *env.last_exit_code = 0;
                 for val in values {
                     // Expand variables (e.g. $VAR) and globs (e.g. *.txt)
-                    let expanded_val = oxide_parser::expand::expand_text(val);
-                    for final_val in oxide_parser::glob::expand_glob(&expanded_val) {
+                    for final_val in expand_word(val) {
                         if self.exit_status.is_some() {
                             return;
                         }
@@ -257,12 +257,7 @@ impl Executor {
     }
 
     fn evaluate_if_condition(&self, condition: &str) -> bool {
-        let val = if let Some(name) = condition.strip_prefix('$') {
-            std::env::var(name).unwrap_or_else(|_| "0".to_string())
-        } else {
-            condition.to_string()
-        };
-
+        let val = expand_string(condition);
         !val.is_empty() && val != "0" && val != "false"
     }
 
@@ -274,25 +269,29 @@ impl Executor {
     /// statement come through here, so there is a single definition of what
     /// each command name means.
     fn run_command(&mut self, cmd: &Command, env: &mut ExecEnv<'_>) {
-        let expanded_args = expand_args(cmd);
+        let cmd = &expand_command(cmd);
+        if cmd.program.is_empty() {
+            // The whole command expanded to nothing, as with an unset `$CMD`.
+            *env.last_exit_code = 0;
+            return;
+        }
 
-        if !self.check_permission(&cmd.program, &expanded_args, env) {
+        if !self.check_permission(&cmd.program, &cmd.args, env) {
             return;
         }
 
         if let Some(kind) = ExecutorBuiltin::lookup(&cmd.program) {
-            *env.last_exit_code = self.run_executor_builtin(kind, &expanded_args, env);
+            *env.last_exit_code = self.run_executor_builtin(kind, &cmd.args, env);
             return;
         }
 
         if let Some(builtin) = oxide_builtins::registry().get(&cmd.program) {
-            let (code, _) =
-                run_builtin_stage(builtin, &expanded_args, Upstream::None, cmd, true, env);
+            let (code, _) = run_builtin_stage(builtin, &cmd.args, Upstream::None, cmd, true, env);
             *env.last_exit_code = code;
             return;
         }
 
-        self.spawn_external(cmd, &expanded_args, env);
+        self.spawn_external(cmd, &cmd.args, env);
     }
 
     /// Runs the security gate and writes the audit record. Returns false when
@@ -527,9 +526,18 @@ impl Executor {
 
         for (i, cmd) in commands.iter().enumerate() {
             let is_last = i == len - 1;
-            let expanded_args = expand_args(cmd);
+            let cmd = &expand_command(cmd);
+            if cmd.program.is_empty() {
+                // A stage that expanded to nothing produces no output.
+                upstream = Upstream::None;
+                if is_last {
+                    *env.last_exit_code = 0;
+                    status_from_child = false;
+                }
+                continue;
+            }
 
-            if !self.check_permission(&cmd.program, &expanded_args, env) {
+            if !self.check_permission(&cmd.program, &cmd.args, env) {
                 break;
             }
 
@@ -541,7 +549,7 @@ impl Executor {
 
             if let Some(builtin) = oxide_builtins::registry().get(&cmd.program) {
                 let (code, next) =
-                    run_builtin_stage(builtin, &expanded_args, upstream.take(), cmd, is_last, env);
+                    run_builtin_stage(builtin, &cmd.args, upstream.take(), cmd, is_last, env);
                 upstream = next;
                 if is_last {
                     *env.last_exit_code = code;
@@ -553,7 +561,7 @@ impl Executor {
             let program_path = resolve_program_path(&cmd.program, env.command_cache);
             match spawn_stage(
                 &program_path,
-                &expanded_args,
+                &cmd.args,
                 upstream.take(),
                 is_last,
                 &cmd.outfile,
@@ -608,25 +616,34 @@ impl Executor {
 // HELPERS
 // ==========================================
 
-/// Applies variable and glob expansion to a command's arguments.
+/// Expands a command as typed into the command that actually runs: the
+/// program and its arguments go through full word expansion, redirection
+/// targets through single-string expansion.
 ///
-/// A handful of builtins take literal text that must survive untouched:
-/// `alias` and `export` take `KEY=VALUE` pairs, `unset` takes variable names,
-/// and `source` takes a path that globbing would multiply.
-fn expand_args(cmd: &Command) -> Vec<String> {
-    if matches!(
-        cmd.program.as_str(),
-        "source" | "alias" | "unset" | "export"
-    ) {
-        return cmd.args.clone();
+/// A handful of builtins take declarations rather than ordinary arguments:
+/// `alias` and `export` take `NAME=VALUE` pairs, `unset` takes names, and
+/// `source` takes one path. Their arguments are expanded as single strings,
+/// so `export GREETING="hello world"` or a value holding `*` arrives whole.
+fn expand_command(cmd: &Command) -> Command {
+    let mut words = expand_word(&cmd.program).into_iter();
+    let program = words.next().unwrap_or_default();
+    let mut args: Vec<String> = words.collect();
+
+    if matches!(program.as_str(), "source" | "alias" | "unset" | "export") {
+        args.extend(cmd.args.iter().map(|arg| expand_string(arg)));
+    } else {
+        for arg in &cmd.args {
+            args.extend(expand_word(arg));
+        }
     }
 
-    let mut expanded = Vec::with_capacity(cmd.args.len());
-    for arg in &cmd.args {
-        let text_expanded = oxide_parser::expand::expand_text(arg);
-        expanded.extend(oxide_parser::glob::expand_glob(&text_expanded));
+    Command {
+        program,
+        args,
+        outfile: cmd.outfile.as_deref().map(expand_string),
+        infile: cmd.infile.as_deref().map(expand_string),
+        append: cmd.append,
     }
-    expanded
 }
 
 /// Runs a registry builtin, wiring its three streams from `upstream` and the
@@ -732,9 +749,20 @@ mod tests {
     }
 
     #[test]
-    fn literal_arguments_skip_glob_expansion() {
+    fn declaration_arguments_are_not_split_or_globbed() {
         let mut cmd = Command::new("export".to_string());
-        cmd.args = vec!["GREETING=hello *".to_string()];
-        assert_eq!(expand_args(&cmd), vec!["GREETING=hello *".to_string()]);
+        cmd.args = vec!["GREETING=\"hello *\"".to_string(), "STAR=*".to_string()];
+        assert_eq!(expand_command(&cmd).args, ["GREETING=hello *", "STAR=*"]);
+    }
+
+    #[test]
+    fn quoted_program_names_and_redirects_are_unquoted() {
+        let mut cmd = Command::new("'echo'".to_string());
+        cmd.args = vec!["\"a  b\"".to_string()];
+        cmd.outfile = Some("'out file.txt'".to_string());
+        let cmd = expand_command(&cmd);
+        assert_eq!(cmd.program, "echo");
+        assert_eq!(cmd.args, ["a  b"]);
+        assert_eq!(cmd.outfile.as_deref(), Some("out file.txt"));
     }
 }

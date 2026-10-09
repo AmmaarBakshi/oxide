@@ -1,27 +1,29 @@
 use glob::glob;
 
-pub fn expand_glob(pattern: &str) -> Vec<String> {
-    let mut matches = Vec::new();
-
-    let normalized_pattern = if cfg!(windows) {
+/// The paths matching `pattern`, in sorted order; empty when nothing
+/// matches or the pattern is malformed.
+///
+/// On Windows the pattern's `/` separators become `\` for matching, and the
+/// results use `/` again, so scripts can write paths the same way everywhere.
+pub fn matches(pattern: &str) -> Vec<String> {
+    let normalized = if cfg!(windows) {
         pattern.replace('/', "\\")
     } else {
         pattern.to_string()
     };
 
-    if normalized_pattern.contains('*')
-        || normalized_pattern.contains('?')
-        || normalized_pattern.contains('[')
-    {
-        if let Ok(paths) = glob(&normalized_pattern) {
-            for entry in paths.flatten() {
-                matches.push(entry.display().to_string().replace('\\', "/"));
+    let Ok(paths) = glob(&normalized) else {
+        return Vec::new();
+    };
+    paths
+        .flatten()
+        .map(|path| {
+            let path = path.display().to_string();
+            if cfg!(windows) {
+                path.replace('\\', "/")
+            } else {
+                path
             }
-        }
-    }
-
-    if matches.is_empty() {
-        matches.push(pattern.to_string()); // Return the original string if no * or ? matched
-    }
-    matches
+        })
+        .collect()
 }
