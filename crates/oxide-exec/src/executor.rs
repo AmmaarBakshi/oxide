@@ -24,7 +24,7 @@ use oxide_parser::parser::Parser;
 use oxide_perf::cache::CommandCache;
 use oxide_security::permissions::PermissionManager;
 
-use crate::pipeline::{builtin_sink, spawn_stage, Upstream};
+use crate::pipeline::{builtin_sink, spawn_stage, SharedBuf, Upstream};
 
 pub struct Executor {
     pub runtime: oxide_script::runtime::Runtime,
@@ -641,10 +641,9 @@ impl Executor {
                         status_from_child = true;
                     } else {
                         upstream = stage
-                            .child
-                            .stdout
+                            .output
                             .take()
-                            .map(Upstream::Child)
+                            .map(Upstream::Pipe)
                             .unwrap_or(Upstream::None);
                     }
                     spawned.push(stage);
@@ -733,6 +732,8 @@ fn expand_command(cmd: &Command, ctx: &dyn Context) -> Command {
         append: cmd.append,
         errfile: cmd.errfile.as_deref().map(|f| expand_string(f, ctx)),
         err_append: cmd.err_append,
+        err_to_out: cmd.err_to_out,
+        out_to_err: cmd.out_to_err,
     }
 }
 
@@ -780,7 +781,24 @@ fn run_builtin_stage(
         vars,
     };
 
-    let code = {
+    let code = if cmd.err_to_out || cmd.out_to_err {
+        // `2>&1` / `>&2`: both streams write into one buffer, so lines keep
+        // the order they were written in, and it all goes where they were
+        // joined.
+        let merged = SharedBuf::default();
+        let (mut out, mut err) = (merged.clone(), merged.clone());
+        let code = {
+            let mut io = Io::new(&mut *reader, &mut out, &mut err);
+            builtin.run(args, &mut io, &mut ctx)
+        };
+        let dest: &mut dyn Write = if cmd.err_to_out {
+            sink.as_writer()
+        } else {
+            &mut *stderr
+        };
+        let _ = dest.write_all(&merged.take());
+        code
+    } else {
         let mut io = Io::new(&mut *reader, sink.as_writer(), &mut *stderr);
         builtin.run(args, &mut io, &mut ctx)
     };

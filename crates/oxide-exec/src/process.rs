@@ -23,8 +23,7 @@ pub fn status_code(status: ExitStatus) -> i32 {
 /// Hooks up all of `cmd`'s redirects on `process`.
 fn apply_redirects(process: &mut Command, cmd: &ast::Command) {
     redirect::apply_input(process, &cmd.infile);
-    redirect::apply_output(process, &cmd.outfile, cmd.append);
-    redirect::apply_error(process, &cmd.errfile, cmd.err_append);
+    redirect::apply_outputs(process, cmd, None);
 }
 
 /// Runs a single command and returns its exit code. The redirects come from

@@ -17,6 +17,10 @@ pub enum Token {
     RedirectIn,        // Add this
     RedirectErr,       // 2>
     RedirectErrAppend, // 2>>
+    ErrToOut,          // 2>&1
+    OutToErr,          // >&2
+    RedirectAll,       // &>
+    RedirectAllAppend, // &>>
     Background,        // Add this
     Newline,
     Semicolon,
@@ -45,6 +49,10 @@ impl fmt::Display for Token {
             Token::RedirectIn => write!(f, "<"), // Add this
             Token::RedirectErr => write!(f, "2>"),
             Token::RedirectErrAppend => write!(f, "2>>"),
+            Token::ErrToOut => write!(f, "2>&1"),
+            Token::OutToErr => write!(f, ">&2"),
+            Token::RedirectAll => write!(f, "&>"),
+            Token::RedirectAllAppend => write!(f, "&>>"),
             Token::Background => write!(f, "&"), // Add this
             Token::Newline => writeln!(f),
             Token::Semicolon => write!(f, ";"),

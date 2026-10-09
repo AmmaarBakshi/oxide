@@ -36,6 +36,10 @@ pub struct Command {
     pub errfile: Option<String>,
     /// When true, `errfile` is appended to (`2>>`).
     pub err_append: bool,
+    /// `2>&1` (or `&>`): stderr goes wherever stdout goes.
+    pub err_to_out: bool,
+    /// `>&2`: stdout goes wherever stderr goes.
+    pub out_to_err: bool,
 }
 
 impl Command {
@@ -49,6 +53,8 @@ impl Command {
             append: false,
             errfile: None,
             err_append: false,
+            err_to_out: false,
+            out_to_err: false,
         }
     }
 }

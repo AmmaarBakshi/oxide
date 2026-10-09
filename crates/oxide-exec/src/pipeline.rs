@@ -11,8 +11,10 @@
 //! in the middle of a chain materializes its output before the next stage
 //! starts, which is fine for the sizes builtins produce.
 
-use std::io::{BufRead, BufReader, Cursor, Write};
-use std::process::{Child, ChildStdout, Stdio};
+use std::cell::RefCell;
+use std::io::{BufRead, BufReader, Cursor, PipeReader, Write};
+use std::process::{Child, Stdio};
+use std::rc::Rc;
 use std::thread::JoinHandle;
 
 use crate::redirect;
@@ -22,8 +24,8 @@ use oxide_parser::ast;
 pub enum Upstream {
     /// First stage — there is no previous output.
     None,
-    /// An OS process's stdout, connected as a real pipe.
-    Child(ChildStdout),
+    /// An OS process's output, connected as a real pipe.
+    Pipe(PipeReader),
     /// A builtin's captured output.
     Buffer(Vec<u8>),
 }
@@ -40,7 +42,7 @@ impl Upstream {
     /// failing that to the terminal's stdin, matching how a lone builtin runs.
     pub fn into_reader(self, infile: &Option<String>) -> Result<Box<dyn BufRead>, String> {
         match self {
-            Upstream::Child(stdout) => Ok(Box::new(BufReader::new(stdout))),
+            Upstream::Pipe(pipe) => Ok(Box::new(BufReader::new(pipe))),
             Upstream::Buffer(bytes) => Ok(Box::new(Cursor::new(bytes))),
             Upstream::None => match infile {
                 Some(path) => {
@@ -62,6 +64,9 @@ pub struct Spawned {
     /// larger than the OS pipe capacity from deadlocking us against a child
     /// that hasn't started reading yet.
     pub feeder: Option<JoinHandle<()>>,
+    /// The read end of this stage's output, for the next stage. `None` for
+    /// the last stage.
+    pub output: Option<PipeReader>,
 }
 
 /// Spawns one external stage of a pipeline, wiring `upstream` to its stdin.
@@ -78,8 +83,8 @@ pub fn spawn_stage(
 
     let mut pending_bytes = None;
     match upstream {
-        Upstream::Child(stdout) => {
-            process.stdin(Stdio::from(stdout));
+        Upstream::Pipe(pipe) => {
+            process.stdin(Stdio::from(pipe));
         }
         Upstream::Buffer(bytes) => {
             process.stdin(Stdio::piped());
@@ -91,17 +96,22 @@ pub fn spawn_stage(
         }
     }
 
-    if is_last {
-        redirect::apply_output(&mut process, &cmd.outfile, cmd.append);
+    // Every stage but the last writes into a pipe for the next one. An OS
+    // pipe rather than `Stdio::piped()` lets `2>&1` join stderr onto it.
+    let (output, pipe) = if is_last {
+        (None, None)
     } else {
-        process.stdout(Stdio::piped());
-    }
-    // Any stage, not just the last, can send its stderr elsewhere.
-    redirect::apply_error(&mut process, &cmd.errfile, cmd.err_append);
+        let (reader, writer) = std::io::pipe().map_err(|e| format!("oxide: pipeline: {}", e))?;
+        (Some(reader), Some(writer))
+    };
+    redirect::apply_outputs(&mut process, cmd, pipe);
 
     let mut child = process
         .spawn()
         .map_err(|_| format!("oxide: command not found: {}", program))?;
+    // `process` still holds our copy of the pipe's write end; close it so
+    // the next stage sees end-of-file once this one exits.
+    drop(process);
 
     let feeder = pending_bytes.and_then(|bytes| {
         child.stdin.take().map(|mut sink| {
@@ -113,7 +123,11 @@ pub fn spawn_stage(
         })
     });
 
-    Ok(Spawned { child, feeder })
+    Ok(Spawned {
+        child,
+        feeder,
+        output,
+    })
 }
 
 /// Opens a builtin's output sink: the final redirect target, the terminal, or
@@ -131,6 +145,29 @@ pub fn builtin_sink(
             .map(BuiltinSink::File)
             .map_err(|e| format!("oxide: redirection error: {}: {}", path, e)),
         None => Ok(BuiltinSink::Stdout(std::io::stdout())),
+    }
+}
+
+/// One buffer behind any number of writers. It gives a builtin a stdout and
+/// a stderr that land in the same place (`2>&1`), in the order written.
+#[derive(Clone, Default)]
+pub struct SharedBuf(Rc<RefCell<Vec<u8>>>);
+
+impl SharedBuf {
+    /// Takes everything written so far.
+    pub fn take(&self) -> Vec<u8> {
+        std::mem::take(&mut *self.0.borrow_mut())
+    }
+}
+
+impl Write for SharedBuf {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0.borrow_mut().extend_from_slice(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
     }
 }
 

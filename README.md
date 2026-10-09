@@ -62,7 +62,7 @@ For detailed architecture insights, see [docs/architecture.md](docs/architecture
 
 ### Prerequisites
 
-- **Rust 1.70+** ([Install Rust](https://rustup.rs/))
+- **Rust 1.87+** ([Install Rust](https://rustup.rs/))
 - **Cargo** (included with Rust)
 - **On Windows:** MSVC build tools
 

@@ -133,6 +133,21 @@ mod tests {
     }
 
     #[test]
+    fn joined_streams_are_parsed() {
+        let cmd = command("make > all.txt 2>&1");
+        assert_eq!(cmd.outfile.as_deref(), Some("all.txt"));
+        assert!(cmd.err_to_out && !cmd.out_to_err);
+
+        let cmd = command("make &>> all.txt");
+        assert_eq!(cmd.outfile.as_deref(), Some("all.txt"));
+        assert!(cmd.append && cmd.err_to_out);
+
+        let cmd = command("echo oops >&2");
+        assert_eq!(cmd.args, ["oops"]);
+        assert!(cmd.out_to_err && !cmd.err_to_out);
+    }
+
+    #[test]
     fn words_that_only_look_like_assignments_are_commands() {
         for word in ["=x", "1X=2", "\"X\"=1", "A-B=1"] {
             let cmd = command(word);

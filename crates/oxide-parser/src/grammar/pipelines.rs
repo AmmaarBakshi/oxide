@@ -29,11 +29,22 @@ impl Parser {
                     }
                     self.cursor += 1;
                 }
+                Token::ErrToOut | Token::OutToErr => {
+                    let cmd = current_cmd.get_or_insert_with(|| Command::new(String::new()));
+                    if self.tokens[self.cursor] == Token::ErrToOut {
+                        cmd.err_to_out = true;
+                    } else {
+                        cmd.out_to_err = true;
+                    }
+                    self.cursor += 1;
+                }
                 Token::RedirectOut
                 | Token::RedirectAppend
                 | Token::RedirectIn
                 | Token::RedirectErr
-                | Token::RedirectErrAppend => {
+                | Token::RedirectErrAppend
+                | Token::RedirectAll
+                | Token::RedirectAllAppend => {
                     let op = self.tokens[self.cursor].clone();
                     self.cursor += 1;
                     let Some(target) = self.redirect_target() else {
@@ -47,6 +58,11 @@ impl Parser {
                             cmd.append = op == Token::RedirectAppend;
                         }
                         Token::RedirectIn => cmd.infile = Some(target),
+                        Token::RedirectAll | Token::RedirectAllAppend => {
+                            cmd.outfile = Some(target);
+                            cmd.append = op == Token::RedirectAllAppend;
+                            cmd.err_to_out = true;
+                        }
                         _ => {
                             cmd.errfile = Some(target);
                             cmd.err_append = op == Token::RedirectErrAppend;

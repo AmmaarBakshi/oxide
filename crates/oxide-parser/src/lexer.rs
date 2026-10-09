@@ -36,25 +36,32 @@ impl<'a> Lexer<'a> {
                         tokens.push(Token::Pipe);
                     }
                 }
-                // Handle Background and AND (&, &&)
+                // Handle Background and AND (&, &&), and &> / &>> which
+                // send both stdout and stderr to a file.
                 '&' => {
-                    self.input.next();
-                    if self.input.peek() == Some(&'&') {
+                    let token = if self.eat("&&") {
+                        Token::And
+                    } else if self.eat("&>>") {
+                        Token::RedirectAllAppend
+                    } else if self.eat("&>") {
+                        Token::RedirectAll
+                    } else {
                         self.input.next();
-                        tokens.push(Token::And);
-                    } else {
-                        tokens.push(Token::Background);
-                    }
+                        Token::Background
+                    };
+                    tokens.push(token);
                 }
-                // Handle Redirects (<, >)
+                // Handle Redirects (>, >>, and >&2 for "stdout to stderr")
                 '>' => {
-                    self.input.next(); // consume the first >
-                    if self.input.peek() == Some(&'>') {
-                        self.input.next(); // consume the second >
-                        tokens.push(Token::RedirectAppend);
+                    let token = if self.eat(">&2") {
+                        Token::OutToErr
+                    } else if self.eat(">>") {
+                        Token::RedirectAppend
                     } else {
-                        tokens.push(Token::RedirectOut);
-                    }
+                        self.input.next();
+                        Token::RedirectOut
+                    };
+                    tokens.push(token);
                 }
                 '<' => {
                     self.input.next();
@@ -76,15 +83,17 @@ impl<'a> Lexer<'a> {
                 _ => {
                     let word = self.word();
                     if word == "2" && self.input.peek() == Some(&'>') {
-                        // `2>` and `2>>` redirect stderr. Only a bare 2 right
-                        // against the `>` counts: `echo 2 > f` writes "2".
-                        self.input.next();
-                        if self.input.peek() == Some(&'>') {
-                            self.input.next();
-                            tokens.push(Token::RedirectErrAppend);
+                        // `2>`, `2>>` and `2>&1` redirect stderr. Only a bare
+                        // 2 right against the `>` counts: `echo 2 > f` writes "2".
+                        let token = if self.eat(">&1") {
+                            Token::ErrToOut
+                        } else if self.eat(">>") {
+                            Token::RedirectErrAppend
                         } else {
-                            tokens.push(Token::RedirectErr);
-                        }
+                            self.input.next();
+                            Token::RedirectErr
+                        };
+                        tokens.push(token);
                     } else if !word.is_empty() {
                         // (A backslash-newline on its own reads as nothing.)
                         tokens.push(Token::Word(word));
@@ -93,6 +102,18 @@ impl<'a> Lexer<'a> {
             }
         }
         tokens
+    }
+
+    /// Consumes `s` if the input continues with it, and says whether it did.
+    fn eat(&mut self, s: &str) -> bool {
+        let mut ahead = self.input.clone();
+        for expected in s.chars() {
+            if ahead.next() != Some(expected) {
+                return false;
+            }
+        }
+        self.input = ahead;
+        true
     }
 
     /// Reads one word, keeping its quotes and backslashes as written. They
@@ -213,6 +234,26 @@ mod tests {
                 word("x2"),
                 Token::RedirectOut,
                 word("g")
+            ]
+        );
+    }
+
+    #[test]
+    fn stream_joining_operators() {
+        assert_eq!(
+            words("a 2>&1 >&2 &>f &>>g & b && c"),
+            [
+                word("a"),
+                Token::ErrToOut,
+                Token::OutToErr,
+                Token::RedirectAll,
+                word("f"),
+                Token::RedirectAllAppend,
+                word("g"),
+                Token::Background,
+                word("b"),
+                Token::And,
+                word("c")
             ]
         );
     }

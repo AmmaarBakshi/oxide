@@ -1,6 +1,8 @@
 use std::fs::{File, OpenOptions};
-use std::io::Write;
+use std::io::{PipeWriter, Write};
 use std::process::{Command, Stdio};
+
+use oxide_parser::ast;
 
 /// Opens a `>` / `>>` / `2>` / `2>>` target. When `append` is true the file
 /// is opened in append mode; otherwise it is truncated/created.
@@ -26,31 +28,82 @@ fn null_device(path: &str) -> &str {
     }
 }
 
-/// Hooks up an output redirect on a child process.
-pub fn apply_output(process: &mut Command, outfile: &Option<String>, append: bool) {
-    if let Some(path) = outfile {
+/// Where one of a child's output streams goes.
+enum Dest {
+    /// Wherever the shell's own stream of the same name goes.
+    Inherit,
+    /// The shell's stdout, for a child stderr joined to it (`2>&1`).
+    ShellStdout,
+    /// The shell's stderr, for a child stdout joined to it (`>&2`).
+    ShellStderr,
+    File(File),
+    /// The pipe to the next stage of a pipeline.
+    Pipe(PipeWriter),
+}
+
+impl Dest {
+    fn open(path: &str, append: bool) -> Self {
         match open_output(path, append) {
-            Ok(file) => {
-                process.stdout(Stdio::from(file));
-            }
+            Ok(file) => Dest::File(file),
             Err(e) => {
                 eprintln!("oxide: redirection error: {}: {}", path, e);
+                Dest::Inherit
             }
+        }
+    }
+
+    /// A second handle to the same place, for the other stream of a pair
+    /// joined with `2>&1` or `>&2`.
+    fn duplicate(&self, inherited: Dest) -> Dest {
+        let copy = match self {
+            Dest::Inherit => return inherited,
+            Dest::ShellStdout => return Dest::ShellStdout,
+            Dest::ShellStderr => return Dest::ShellStderr,
+            Dest::File(file) => file.try_clone().map(Dest::File),
+            Dest::Pipe(pipe) => pipe.try_clone().map(Dest::Pipe),
+        };
+        copy.unwrap_or_else(|e| {
+            eprintln!("oxide: redirection error: {}", e);
+            Dest::Inherit
+        })
+    }
+
+    fn into_stdio(self) -> Option<Stdio> {
+        match self {
+            Dest::Inherit => None,
+            Dest::ShellStdout => Some(Stdio::from(std::io::stdout())),
+            Dest::ShellStderr => Some(Stdio::from(std::io::stderr())),
+            Dest::File(file) => Some(Stdio::from(file)),
+            Dest::Pipe(pipe) => Some(Stdio::from(pipe)),
         }
     }
 }
 
-/// Hooks up a stderr redirect (`2> file`, `2>> file`) on a child process.
-pub fn apply_error(process: &mut Command, errfile: &Option<String>, append: bool) {
-    if let Some(path) = errfile {
-        match open_output(path, append) {
-            Ok(file) => {
-                process.stderr(Stdio::from(file));
-            }
-            Err(e) => {
-                eprintln!("oxide: redirection error: {}: {}", path, e);
-            }
-        }
+/// Points a child's stdout and stderr where `cmd`'s redirects say: files
+/// (`>`, `>>`, `2>`, `2>>`, `&>`), or each other (`2>&1`, `>&2`). `pipe`, when
+/// given, is where stdout goes unless a redirect says otherwise.
+pub fn apply_outputs(process: &mut Command, cmd: &ast::Command, pipe: Option<PipeWriter>) {
+    let mut out = match (&cmd.outfile, pipe) {
+        (Some(path), _) => Dest::open(path, cmd.append),
+        (None, Some(pipe)) => Dest::Pipe(pipe),
+        (None, None) => Dest::Inherit,
+    };
+    let mut err = match &cmd.errfile {
+        Some(path) => Dest::open(path, cmd.err_append),
+        None => Dest::Inherit,
+    };
+    if cmd.err_to_out {
+        err = out.duplicate(Dest::ShellStdout);
+    }
+    if cmd.out_to_err {
+        out = err.duplicate(Dest::ShellStderr);
+    }
+
+    if let Some(stdio) = out.into_stdio() {
+        process.stdout(stdio);
+    }
+    if let Some(stdio) = err.into_stdio() {
+        process.stderr(stdio);
     }
 }
 
