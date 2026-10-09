@@ -1,17 +1,23 @@
+use crate::heredoc::{self, Delimiter};
 use crate::token::Token;
 use std::iter::Peekable;
 use std::str::Chars;
 
 pub struct Lexer<'a> {
     input: Peekable<Chars<'a>>,
-    /// Set when the input ran out inside a quote, `$(`, backtick, or right
-    /// after a backslash: more lines would continue it.
+    /// Set when the input ran out inside a quote, `$(`, backtick, here-doc,
+    /// or right after a backslash: more lines would continue it.
     unterminated: bool,
+    /// Here-documents opened on the current line, waiting for its end to
+    /// collect their bodies: the index of each `HereDoc` token, and its
+    /// delimiter.
+    pending_heredocs: Vec<(usize, Delimiter)>,
 }
 
 /// Whether `input` stops in the middle of something and needs more lines to
-/// finish it: an open quote, `$(` or backtick, more `{` than `}`, or a last
-/// line ending in `|`, `&&`, `||` or `\`.
+/// finish it: an open quote, `$(` or backtick, a here-document still
+/// missing its delimiter line, more `{` than `}`, or a last line ending in
+/// `|`, `&&`, `||` or `\`.
 pub fn is_incomplete(input: &str) -> bool {
     let mut lexer = Lexer::new(input);
     let tokens = lexer.tokenize();
@@ -40,6 +46,7 @@ impl<'a> Lexer<'a> {
         Lexer {
             input: input.chars().peekable(),
             unterminated: false,
+            pending_heredocs: Vec::new(),
         }
     }
 
@@ -55,6 +62,7 @@ impl<'a> Lexer<'a> {
                 '\n' => {
                     self.input.next();
                     tokens.push(Token::Newline);
+                    self.collect_heredocs(&mut tokens);
                 }
                 // Handle Pipes and OR (|, ||)
                 '|' => {
@@ -94,8 +102,14 @@ impl<'a> Lexer<'a> {
                     tokens.push(token);
                 }
                 '<' => {
-                    self.input.next();
-                    tokens.push(Token::RedirectIn);
+                    if self.eat("<<-") {
+                        self.heredoc(true, &mut tokens);
+                    } else if self.eat("<<") {
+                        self.heredoc(false, &mut tokens);
+                    } else {
+                        self.input.next();
+                        tokens.push(Token::RedirectIn);
+                    }
                 }
                 ';' => {
                     self.input.next();
@@ -133,7 +147,54 @@ impl<'a> Lexer<'a> {
                 }
             }
         }
+        // A here-document whose line never ended has no body yet.
+        if !self.pending_heredocs.is_empty() {
+            self.pending_heredocs.clear();
+            self.unterminated = true;
+        }
         tokens
+    }
+
+    /// Reads the delimiter after `<<` (or `<<-`) and leaves a `HereDoc`
+    /// token whose body is filled in at the end of the line.
+    fn heredoc(&mut self, strip_tabs: bool, tokens: &mut Vec<Token>) {
+        while self.input.next_if(|&c| c == ' ' || c == '\t').is_some() {}
+        let raw = self.word();
+        let delimiter = Delimiter::parse(&raw, strip_tabs);
+        tokens.push(Token::HereDoc {
+            body: String::new(),
+            expand: delimiter.expand,
+        });
+        self.pending_heredocs.push((tokens.len() - 1, delimiter));
+    }
+
+    /// At the end of a line, reads the bodies of the here-documents it
+    /// opened, in order, from the lines that follow.
+    fn collect_heredocs(&mut self, tokens: &mut [Token]) {
+        for (index, delimiter) in std::mem::take(&mut self.pending_heredocs) {
+            let lines = std::iter::from_fn(|| self.line());
+            let (body, found) = heredoc::collect_body(lines, &delimiter);
+            if !found {
+                self.unterminated = true;
+            }
+            tokens[index] = Token::HereDoc {
+                body,
+                expand: delimiter.expand,
+            };
+        }
+    }
+
+    /// The next line of input, without its newline; `None` at the end.
+    fn line(&mut self) -> Option<String> {
+        self.input.peek()?;
+        let mut line = String::new();
+        for c in self.input.by_ref() {
+            if c == '\n' {
+                break;
+            }
+            line.push(c);
+        }
+        Some(line)
     }
 
     /// Consumes `s` if the input continues with it, and says whether it did.
@@ -464,6 +525,52 @@ mod tests {
         ] {
             assert!(!is_incomplete(input), "{input:?} should be complete");
         }
+    }
+
+    #[test]
+    fn a_heredoc_takes_the_lines_up_to_its_delimiter() {
+        assert_eq!(
+            words("cat <<EOF > out\nline $X\n  EOF\nEOF\necho after"),
+            [
+                word("cat"),
+                Token::HereDoc {
+                    body: "line $X\n  EOF\n".into(),
+                    expand: true
+                },
+                Token::RedirectOut,
+                word("out"),
+                Token::Newline,
+                word("echo"),
+                word("after")
+            ]
+        );
+    }
+
+    #[test]
+    fn two_heredocs_on_one_line_read_their_bodies_in_turn() {
+        let tokens = words("a <<ONE; b <<'TWO'\n1\nONE\n2\nTWO\n");
+        assert_eq!(
+            tokens[1],
+            Token::HereDoc {
+                body: "1\n".into(),
+                expand: true
+            }
+        );
+        assert_eq!(
+            tokens[4],
+            Token::HereDoc {
+                body: "2\n".into(),
+                expand: false
+            }
+        );
+    }
+
+    #[test]
+    fn a_heredoc_without_its_delimiter_is_incomplete() {
+        assert!(is_incomplete("cat <<EOF"));
+        assert!(is_incomplete("cat <<EOF\nbody\n"));
+        assert!(!is_incomplete("cat <<EOF\nbody\nEOF\n"));
+        assert!(!is_incomplete("cat <<-EOF\n\tbody\n\tEOF"));
     }
 
     #[test]

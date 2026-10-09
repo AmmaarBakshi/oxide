@@ -792,6 +792,7 @@ fn expand_command(cmd: &Command, ctx: &mut dyn Context) -> Command {
         err_append: cmd.err_append,
         err_to_out: cmd.err_to_out,
         out_to_err: cmd.out_to_err,
+        here: cmd.here.clone(),
     }
 }
 

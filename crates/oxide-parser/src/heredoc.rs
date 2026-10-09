@@ -1,43 +1,82 @@
+//! Here-documents: `cmd <<EOF`, then lines of input up to a line `EOF`.
+//!
+//! The lexer calls [`collect_body`] once it reaches the end of the line
+//! holding the `<<`, so the body arrives as part of the command instead of
+//! being run as commands of its own. [`read_payload`] is for when the body
+//! hasn't been typed yet and has to be asked for.
+
 use std::io::{self, Write};
 
-/// Detects if the user triggered a heredoc (e.g., `cat << EOF`)
-/// Returns the cleaned command (e.g., `cat`) and the delimiter (e.g., `EOF`).
-pub fn detect(input: &str) -> Option<(String, String)> {
-    if let Some(pos) = input.find("<<") {
-        let cmd_part = input[..pos].trim().to_string();
-        let rest = input[pos + 2..].trim();
-        
-        if let Some(delimiter) = rest.split_whitespace().next() {
-            return Some((cmd_part, delimiter.to_string()));
+/// The word after `<<` that ends a here-document, and how to read the body.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Delimiter {
+    /// The terminating line, with any quotes removed.
+    pub word: String,
+    /// False when the word was quoted (`<<'EOF'`): the body is then taken
+    /// literally, with no `$` expansion.
+    pub expand: bool,
+    /// `<<-`: leading tabs are stripped from each body line (and from the
+    /// terminating line), so the document can be indented with the script.
+    pub strip_tabs: bool,
+}
+
+impl Delimiter {
+    /// Reads the delimiter as written after `<<` or `<<-`.
+    pub fn parse(raw: &str, strip_tabs: bool) -> Self {
+        let quoting = |c: char| matches!(c, '\'' | '"' | '\\');
+        Self {
+            word: raw.chars().filter(|&c| !quoting(c)).collect(),
+            expand: !raw.contains(quoting),
+            strip_tabs,
         }
     }
-    None
+}
+
+/// Collects a here-document body from `lines`, up to the line that is
+/// exactly the delimiter. Returns the body and whether the delimiter was
+/// found before the lines ran out.
+pub fn collect_body(lines: impl Iterator<Item = String>, delimiter: &Delimiter) -> (String, bool) {
+    let mut body = String::new();
+    for line in lines {
+        let line = line.strip_suffix('\r').unwrap_or(&line);
+        let line = if delimiter.strip_tabs {
+            line.trim_start_matches('\t')
+        } else {
+            line
+        };
+        if line == delimiter.word {
+            return (body, true);
+        }
+        body.push_str(line);
+        body.push('\n');
+    }
+    (body, false)
 }
 
 /// Takes over the terminal and reads lines until the delimiter is typed.
 pub fn read_payload(delimiter: &str) -> String {
     let mut payload = String::new();
     let stdin = io::stdin();
-    
+
     // We enter an infinite loop to capture multiline text
     loop {
         // The standard POSIX prompt for multiline shell inputs
         print!("> ");
         let _ = io::stdout().flush();
-        
+
         let mut line = String::new();
-        if stdin.read_line(&mut line).is_err() {
+        if stdin.read_line(&mut line).unwrap_or(0) == 0 {
             break;
         }
-        
+
         // If the user types EXACTLY the delimiter, we break the loop!
         if line.trim_end() == delimiter {
             break;
         }
-        
+
         payload.push_str(&line);
     }
-    
+
     payload
 }
 
@@ -45,23 +84,46 @@ pub fn read_payload(delimiter: &str) -> String {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_detect_heredoc_simple() {
-        let (cmd, delim) = detect("cat << EOF").unwrap();
-        assert_eq!(cmd, "cat");
-        assert_eq!(delim, "EOF");
+    fn lines(text: &str) -> impl Iterator<Item = String> + '_ {
+        text.lines().map(str::to_string)
     }
 
     #[test]
-    fn test_detect_heredoc_complex() {
-        // Even if there are spaces, it should find the first word after <<
-        let (cmd, delim) = detect("grep 'test'   <<    END_OF_TEXT").unwrap();
-        assert_eq!(cmd, "grep 'test'");
-        assert_eq!(delim, "END_OF_TEXT");
+    fn quoting_the_delimiter_turns_expansion_off() {
+        assert_eq!(
+            Delimiter::parse("EOF", false),
+            Delimiter {
+                word: "EOF".into(),
+                expand: true,
+                strip_tabs: false
+            }
+        );
+        assert!(!Delimiter::parse("'EOF'", false).expand);
+        assert!(!Delimiter::parse("\"END\"", true).expand);
+        assert_eq!(Delimiter::parse("\\EOF", false).word, "EOF");
     }
 
     #[test]
-    fn test_no_heredoc() {
-        assert!(detect("echo 'no heredoc here'").is_none());
+    fn the_body_ends_at_the_delimiter_line() {
+        let delimiter = Delimiter::parse("EOF", false);
+        let (body, found) = collect_body(lines("one\n  EOF\ntwo\nEOF\nafter"), &delimiter);
+        assert_eq!(body, "one\n  EOF\ntwo\n");
+        assert!(found);
+    }
+
+    #[test]
+    fn dash_strips_leading_tabs() {
+        let delimiter = Delimiter::parse("EOF", true);
+        let (body, found) = collect_body(lines("\tindented\n\t\tdeeper\n\tEOF"), &delimiter);
+        assert_eq!(body, "indented\ndeeper\n");
+        assert!(found);
+    }
+
+    #[test]
+    fn a_missing_delimiter_is_reported() {
+        let delimiter = Delimiter::parse("EOF", false);
+        let (body, found) = collect_body(lines("only\nlines"), &delimiter);
+        assert_eq!(body, "only\nlines\n");
+        assert!(!found);
     }
 }

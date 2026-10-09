@@ -1,4 +1,4 @@
-use crate::ast::{Assignment, Command, Statement};
+use crate::ast::{Assignment, Command, HereInput, Statement};
 use crate::parser::Parser;
 use crate::token::Token;
 
@@ -32,6 +32,16 @@ impl Parser {
                     while self.tokens.get(self.cursor) == Some(&Token::Newline) {
                         self.cursor += 1;
                     }
+                }
+                Token::HereDoc { body, expand } => {
+                    let here = HereInput::Document {
+                        body: body.clone(),
+                        expand: *expand,
+                    };
+                    current_cmd
+                        .get_or_insert_with(|| Command::new(String::new()))
+                        .here = Some(here);
+                    self.cursor += 1;
                 }
                 Token::ErrToOut | Token::OutToErr => {
                     let cmd = current_cmd.get_or_insert_with(|| Command::new(String::new()));

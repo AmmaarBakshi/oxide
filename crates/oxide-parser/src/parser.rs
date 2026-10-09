@@ -148,6 +148,20 @@ mod tests {
     }
 
     #[test]
+    fn a_heredoc_belongs_to_its_command() {
+        use crate::ast::HereInput;
+        let cmd = command("cat <<'END'\n$literal\nEND\n");
+        assert_eq!(cmd.program, "cat");
+        assert_eq!(
+            cmd.here,
+            Some(HereInput::Document {
+                body: "$literal\n".into(),
+                expand: false
+            })
+        );
+    }
+
+    #[test]
     fn words_that_only_look_like_assignments_are_commands() {
         for word in ["=x", "1X=2", "\"X\"=1", "A-B=1"] {
             let cmd = command(word);

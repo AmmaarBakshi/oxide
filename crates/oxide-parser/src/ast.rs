@@ -21,6 +21,14 @@ impl Assignment {
     }
 }
 
+/// Text fed to a command's stdin from the command line itself.
+#[derive(Clone, Debug, PartialEq)]
+pub enum HereInput {
+    /// `<<EOF` ... `EOF`. `expand` is false when the delimiter was quoted
+    /// (`<<'EOF'`), which keeps `$` in the body literal.
+    Document { body: String, expand: bool },
+}
+
 #[derive(Clone, Debug)]
 pub struct Command {
     /// The program to run. Empty for a line of bare assignments (`X=1`).
@@ -40,6 +48,8 @@ pub struct Command {
     pub err_to_out: bool,
     /// `>&2`: stdout goes wherever stderr goes.
     pub out_to_err: bool,
+    /// A here-document for stdin.
+    pub here: Option<HereInput>,
 }
 
 impl Command {
@@ -55,6 +65,7 @@ impl Command {
             err_append: false,
             err_to_out: false,
             out_to_err: false,
+            here: None,
         }
     }
 }

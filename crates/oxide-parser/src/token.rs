@@ -21,7 +21,12 @@ pub enum Token {
     OutToErr,          // >&2
     RedirectAll,       // &>
     RedirectAllAppend, // &>>
-    Background,        // Add this
+    /// `<<EOF` with the body the lexer collected from the lines after it.
+    HereDoc {
+        body: String,
+        expand: bool,
+    },
+    Background, // Add this
     Newline,
     Semicolon,
     While,
@@ -53,6 +58,7 @@ impl fmt::Display for Token {
             Token::OutToErr => write!(f, ">&2"),
             Token::RedirectAll => write!(f, "&>"),
             Token::RedirectAllAppend => write!(f, "&>>"),
+            Token::HereDoc { .. } => write!(f, "<<"),
             Token::Background => write!(f, "&"), // Add this
             Token::Newline => writeln!(f),
             Token::Semicolon => write!(f, ";"),
