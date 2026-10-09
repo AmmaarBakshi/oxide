@@ -38,3 +38,26 @@ fn shell_variables_are_not_exported_until_asked() {
 fn unset_removes_shell_variables() {
     run_c("var-unset", "X=1; unset X; echo [$X]").assert_ok("[]\n");
 }
+
+#[test]
+fn a_prefix_assignment_reaches_only_that_command() {
+    let out = run_c(
+        "var-prefix",
+        "OXIDE_P=1 \"$OXIDE_BIN\" -c 'echo child sees $OXIDE_P'; echo shell sees [$OXIDE_P]",
+    );
+    out.assert_ok("child sees 1\nshell sees []\n");
+}
+
+#[test]
+fn a_prefix_assignment_reaches_builtins_too() {
+    run_c("var-prefix-builtin", "OXIDE_P=2 env | grep OXIDE_P=").assert_ok("OXIDE_P=2\n");
+}
+
+#[test]
+fn a_prefix_assignment_leaves_an_exported_variable_as_it_was() {
+    let out = run_c(
+        "var-prefix-restore",
+        "export OXIDE_P=old; OXIDE_P=new env | grep OXIDE_P=; echo $OXIDE_P",
+    );
+    out.assert_ok("OXIDE_P=new\nold\n");
+}

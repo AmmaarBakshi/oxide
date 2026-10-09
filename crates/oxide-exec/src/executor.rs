@@ -12,11 +12,12 @@
 //! 3. an **OS process**, spawned from a `PATH`-resolved absolute path.
 
 use std::collections::HashMap;
+use std::ffi::OsString;
 use std::io::Write;
 
 use oxide_builtins::{Ctx, Io};
 use oxide_compat::CompatMode;
-use oxide_parser::ast::{Command, Condition, Statement};
+use oxide_parser::ast::{Assignment, Command, Condition, Statement};
 use oxide_parser::expand::{expand_string, expand_word, Context};
 use oxide_parser::lexer::Lexer;
 use oxide_parser::parser::Parser;
@@ -325,6 +326,26 @@ impl Executor {
             return;
         }
 
+        // `FOO=1 cmd`: the assignments reach this one command through its
+        // environment and are undone once it has run.
+        let _prefix = self.prefix_env(&cmd.assignments, env);
+        self.dispatch(cmd, env);
+    }
+
+    /// Sets the environment for `FOO=1 cmd`; see [`PrefixEnv`].
+    fn prefix_env(&self, assignments: &[Assignment], env: &ExecEnv<'_>) -> PrefixEnv {
+        let mut saved = Vec::with_capacity(assignments.len());
+        for assignment in assignments {
+            let value = expand_string(&assignment.value, &self.context(env));
+            saved.push((assignment.name.clone(), std::env::var_os(&assignment.name)));
+            std::env::set_var(&assignment.name, value);
+        }
+        PrefixEnv { saved }
+    }
+
+    /// Runs an expanded command: an executor builtin, a registry builtin,
+    /// or an external program, in that order.
+    fn dispatch(&mut self, cmd: &Command, env: &mut ExecEnv<'_>) {
         if !self.check_permission(&cmd.program, &cmd.args, env) {
             return;
         }
@@ -594,6 +615,9 @@ impl Executor {
                 continue;
             }
 
+            // A prefix assignment applies to its own stage only.
+            let _prefix = self.prefix_env(&cmd.assignments, env);
+
             if !self.check_permission(&cmd.program, &cmd.args, env) {
                 break;
             }
@@ -679,6 +703,25 @@ impl Executor {
 // ==========================================
 // HELPERS
 // ==========================================
+
+/// Environment variables set for a single command by `FOO=1 cmd`. Dropping
+/// it puts each one back as it was, so the assignment never outlives the
+/// command, whether that is a builtin or a child process (which takes its
+/// copy of the environment when it is spawned).
+struct PrefixEnv {
+    saved: Vec<(String, Option<OsString>)>,
+}
+
+impl Drop for PrefixEnv {
+    fn drop(&mut self) {
+        for (name, old) in self.saved.drain(..).rev() {
+            match old {
+                Some(value) => std::env::set_var(&name, value),
+                None => std::env::remove_var(&name),
+            }
+        }
+    }
+}
 
 /// Expands a command as typed into the command that actually runs: the
 /// program and its arguments go through full word expansion, redirection
