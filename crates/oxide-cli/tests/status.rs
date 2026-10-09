@@ -36,6 +36,12 @@ fn a_loop_that_never_runs_succeeds() {
 }
 
 #[test]
+fn dollar_question_reads_the_last_status() {
+    let out = run_c("status-dollar-q", "cat missing.txt; echo $?; echo \"[$?]\"");
+    assert_eq!(out.stdout, "1\n[0]\n", "{:?}", out);
+}
+
+#[test]
 fn command_not_found_is_127() {
     let out = run_c("status-127", "definitely-not-a-command-oxide");
     assert_eq!(out.code, 127, "{:?}", out);

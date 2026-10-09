@@ -25,11 +25,18 @@ const ESCAPABLE: &str = " \t\\'\"$`*?[]{}|&;<>()#~";
 /// Characters a backslash escapes inside double quotes.
 const ESCAPABLE_IN_DOUBLE: &str = "\\\"$`";
 
+/// The shell state expansion reads from.
+pub trait Context {
+    /// The value of the variable or special parameter `name` (such as `?`),
+    /// or `None` when it is unset.
+    fn lookup(&self, name: &str) -> Option<String>;
+}
+
 /// Expands `word` into the fields it stands for: none (`$UNSET`), one, or
 /// several (`$LIST`, `*.rs`).
-pub fn expand_word(word: &str) -> Vec<String> {
+pub fn expand_word(word: &str, ctx: &dyn Context) -> Vec<String> {
     let mut fields = Vec::new();
-    for field in expand(word, true) {
+    for field in expand(word, true, ctx) {
         if field.has_glob {
             let matches = crate::glob::matches(&field.pattern);
             if !matches.is_empty() {
@@ -45,8 +52,8 @@ pub fn expand_word(word: &str) -> Vec<String> {
 /// Expands `word` to exactly one string, with no field splitting or
 /// globbing. Used where a single value is wanted: assignment values,
 /// redirection targets and declarations such as `export NAME=value`.
-pub fn expand_string(word: &str) -> String {
-    expand(word, false)
+pub fn expand_string(word: &str, ctx: &dyn Context) -> String {
+    expand(word, false, ctx)
         .into_iter()
         .next()
         .map(|field| field.text)
@@ -138,7 +145,7 @@ impl Fields {
     }
 }
 
-fn expand(word: &str, split: bool) -> Vec<Field> {
+fn expand(word: &str, split: bool, ctx: &dyn Context) -> Vec<Field> {
     let mut out = Fields::new(split);
     let mut chars = word.chars().peekable();
     let mut in_double = false;
@@ -180,7 +187,7 @@ fn expand(word: &str, split: bool) -> Vec<Field> {
                     _ => out.push('\\', in_double),
                 }
             }
-            '$' => match dollar(&mut chars) {
+            '$' => match dollar(&mut chars, ctx) {
                 Dollar::Value(value) => out.push_value(&value, in_double),
                 Dollar::Literal(text) => out.push_str(&text, in_double),
             },
@@ -199,8 +206,13 @@ enum Dollar {
 }
 
 /// Reads what follows a `$` (already consumed) and expands it.
-fn dollar(chars: &mut Peekable<Chars<'_>>) -> Dollar {
+fn dollar(chars: &mut Peekable<Chars<'_>>, ctx: &dyn Context) -> Dollar {
     match chars.peek() {
+        // `$?`: the exit status of the last command.
+        Some('?') => {
+            chars.next();
+            Dollar::Value(lookup("?", ctx))
+        }
         Some('{') => {
             chars.next();
             let mut name = String::new();
@@ -217,7 +229,7 @@ fn dollar(chars: &mut Peekable<Chars<'_>>) -> Dollar {
             } else if name.is_empty() {
                 Dollar::Literal("${}".to_string())
             } else {
-                Dollar::Value(lookup(&name))
+                Dollar::Value(lookup(&name, ctx))
             }
         }
         Some(&c) if c.is_alphanumeric() || c == '_' => {
@@ -229,15 +241,15 @@ fn dollar(chars: &mut Peekable<Chars<'_>>) -> Dollar {
                 name.push(c);
                 chars.next();
             }
-            Dollar::Value(lookup(&name))
+            Dollar::Value(lookup(&name, ctx))
         }
         _ => Dollar::Literal("$".to_string()),
     }
 }
 
 /// A variable's value; unset reads as empty.
-fn lookup(name: &str) -> String {
-    env::var(name).unwrap_or_default()
+fn lookup(name: &str, ctx: &dyn Context) -> String {
+    ctx.lookup(name).unwrap_or_default()
 }
 
 fn home() -> String {
@@ -251,14 +263,30 @@ fn home() -> String {
 mod tests {
     use super::*;
 
+    /// The environment plus a fixed `$?`.
+    struct Status(i32);
+
+    impl Context for Status {
+        fn lookup(&self, name: &str) -> Option<String> {
+            match name {
+                "?" => Some(self.0.to_string()),
+                _ => env::var(name).ok(),
+            }
+        }
+    }
+
     fn words(word: &str) -> Vec<String> {
-        expand_word(word)
+        expand_word(word, &Status(0))
+    }
+
+    fn string(word: &str) -> String {
+        expand_string(word, &Status(0))
     }
 
     #[test]
     fn bare_variable_expands() {
         env::set_var("OXIDE_TEST_BARE", "world");
-        assert_eq!(expand_string("hello$OXIDE_TEST_BARE"), "helloworld");
+        assert_eq!(string("hello$OXIDE_TEST_BARE"), "helloworld");
     }
 
     #[test]
@@ -280,9 +308,16 @@ mod tests {
 
     #[test]
     fn lone_and_unterminated_dollar_are_literal() {
-        assert_eq!(expand_string("cost:$"), "cost:$");
-        assert_eq!(expand_string("a${b"), "a${b");
-        assert_eq!(expand_string("${}"), "${}");
+        assert_eq!(string("cost:$"), "cost:$");
+        assert_eq!(string("a${b"), "a${b");
+        assert_eq!(string("${}"), "${}");
+    }
+
+    #[test]
+    fn dollar_question_is_the_last_status() {
+        assert_eq!(expand_word("$?", &Status(3)), ["3"]);
+        assert_eq!(expand_string("[${?}]", &Status(127)), "[127]");
+        assert_eq!(expand_string("'$?'", &Status(3)), "$?");
     }
 
     #[test]
@@ -296,7 +331,7 @@ mod tests {
         env::set_var("OXIDE_TEST_SPLIT", "a  b");
         assert_eq!(words("\"$OXIDE_TEST_SPLIT\""), ["a  b"]);
         assert_eq!(words("$OXIDE_TEST_SPLIT"), ["a", "b"]);
-        assert_eq!(expand_string("$OXIDE_TEST_SPLIT"), "a  b");
+        assert_eq!(string("$OXIDE_TEST_SPLIT"), "a  b");
     }
 
     #[test]

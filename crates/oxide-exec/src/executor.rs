@@ -17,7 +17,7 @@ use std::io::Write;
 use oxide_builtins::{Ctx, Io};
 use oxide_compat::CompatMode;
 use oxide_parser::ast::{Command, Condition, Statement};
-use oxide_parser::expand::{expand_string, expand_word};
+use oxide_parser::expand::{expand_string, expand_word, Context};
 use oxide_parser::lexer::Lexer;
 use oxide_parser::parser::Parser;
 use oxide_perf::cache::CommandCache;
@@ -80,6 +80,28 @@ impl ExecutorBuiltin {
             "source" => Self::Source,
             _ => return None,
         })
+    }
+}
+
+/// What `$` expansions read: the shell's own state, then the environment.
+struct ShellContext {
+    last_status: i32,
+}
+
+impl ShellContext {
+    fn new(env: &ExecEnv<'_>) -> Self {
+        Self {
+            last_status: *env.last_exit_code,
+        }
+    }
+}
+
+impl Context for ShellContext {
+    fn lookup(&self, name: &str) -> Option<String> {
+        match name {
+            "?" => Some(self.last_status.to_string()),
+            _ => std::env::var(name).ok(),
+        }
     }
 }
 
@@ -211,12 +233,12 @@ impl Executor {
                 else_if,
                 else_body,
             } => {
-                if self.evaluate_if_condition(condition) {
+                if self.evaluate_if_condition(condition, env) {
                     self.execute_statements(body, env);
                     return;
                 }
                 for (else_if_condition, else_if_body) in else_if {
-                    if self.evaluate_if_condition(else_if_condition) {
+                    if self.evaluate_if_condition(else_if_condition, env) {
                         self.execute_statements(else_if_body, env);
                         return;
                     }
@@ -232,7 +254,7 @@ impl Executor {
                 // A loop whose body never runs succeeds; otherwise its status
                 // is that of the last command the body ran.
                 *env.last_exit_code = 0;
-                while self.exit_status.is_none() && self.evaluate_if_condition(condition) {
+                while self.exit_status.is_none() && self.evaluate_if_condition(condition, env) {
                     self.execute_statements(body, env);
                 }
             }
@@ -244,7 +266,7 @@ impl Executor {
                 *env.last_exit_code = 0;
                 for val in values {
                     // Expand variables (e.g. $VAR) and globs (e.g. *.txt)
-                    for final_val in expand_word(val) {
+                    for final_val in expand_word(val, &ShellContext::new(env)) {
                         if self.exit_status.is_some() {
                             return;
                         }
@@ -256,8 +278,8 @@ impl Executor {
         }
     }
 
-    fn evaluate_if_condition(&self, condition: &str) -> bool {
-        let val = expand_string(condition);
+    fn evaluate_if_condition(&self, condition: &str, env: &ExecEnv<'_>) -> bool {
+        let val = expand_string(condition, &ShellContext::new(env));
         !val.is_empty() && val != "0" && val != "false"
     }
 
@@ -269,7 +291,7 @@ impl Executor {
     /// statement come through here, so there is a single definition of what
     /// each command name means.
     fn run_command(&mut self, cmd: &Command, env: &mut ExecEnv<'_>) {
-        let cmd = &expand_command(cmd);
+        let cmd = &expand_command(cmd, &ShellContext::new(env));
         if cmd.program.is_empty() {
             // The whole command expanded to nothing, as with an unset `$CMD`.
             *env.last_exit_code = 0;
@@ -526,7 +548,7 @@ impl Executor {
 
         for (i, cmd) in commands.iter().enumerate() {
             let is_last = i == len - 1;
-            let cmd = &expand_command(cmd);
+            let cmd = &expand_command(cmd, &ShellContext::new(env));
             if cmd.program.is_empty() {
                 // A stage that expanded to nothing produces no output.
                 upstream = Upstream::None;
@@ -624,24 +646,24 @@ impl Executor {
 /// `alias` and `export` take `NAME=VALUE` pairs, `unset` takes names, and
 /// `source` takes one path. Their arguments are expanded as single strings,
 /// so `export GREETING="hello world"` or a value holding `*` arrives whole.
-fn expand_command(cmd: &Command) -> Command {
-    let mut words = expand_word(&cmd.program).into_iter();
+fn expand_command(cmd: &Command, ctx: &dyn Context) -> Command {
+    let mut words = expand_word(&cmd.program, ctx).into_iter();
     let program = words.next().unwrap_or_default();
     let mut args: Vec<String> = words.collect();
 
     if matches!(program.as_str(), "source" | "alias" | "unset" | "export") {
-        args.extend(cmd.args.iter().map(|arg| expand_string(arg)));
+        args.extend(cmd.args.iter().map(|arg| expand_string(arg, ctx)));
     } else {
         for arg in &cmd.args {
-            args.extend(expand_word(arg));
+            args.extend(expand_word(arg, ctx));
         }
     }
 
     Command {
         program,
         args,
-        outfile: cmd.outfile.as_deref().map(expand_string),
-        infile: cmd.infile.as_deref().map(expand_string),
+        outfile: cmd.outfile.as_deref().map(|f| expand_string(f, ctx)),
+        infile: cmd.infile.as_deref().map(|f| expand_string(f, ctx)),
         append: cmd.append,
     }
 }
@@ -724,6 +746,10 @@ fn resolve_program_path(program: &str, command_cache: &mut CommandCache) -> Stri
 mod tests {
     use super::*;
 
+    fn ctx() -> ShellContext {
+        ShellContext { last_status: 0 }
+    }
+
     /// `oxide-ui` completes and highlights every name in `EXECUTOR_BUILTINS`,
     /// so each one has to actually reach a dispatch arm here.
     #[test]
@@ -752,7 +778,10 @@ mod tests {
     fn declaration_arguments_are_not_split_or_globbed() {
         let mut cmd = Command::new("export".to_string());
         cmd.args = vec!["GREETING=\"hello *\"".to_string(), "STAR=*".to_string()];
-        assert_eq!(expand_command(&cmd).args, ["GREETING=hello *", "STAR=*"]);
+        assert_eq!(
+            expand_command(&cmd, &ctx()).args,
+            ["GREETING=hello *", "STAR=*"]
+        );
     }
 
     #[test]
@@ -760,7 +789,7 @@ mod tests {
         let mut cmd = Command::new("'echo'".to_string());
         cmd.args = vec!["\"a  b\"".to_string()];
         cmd.outfile = Some("'out file.txt'".to_string());
-        let cmd = expand_command(&cmd);
+        let cmd = expand_command(&cmd, &ctx());
         assert_eq!(cmd.program, "echo");
         assert_eq!(cmd.args, ["a  b"]);
         assert_eq!(cmd.outfile.as_deref(), Some("out file.txt"));
