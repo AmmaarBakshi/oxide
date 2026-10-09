@@ -4,11 +4,12 @@ use oxide_parser::ast::{self, HereInput};
 use std::io::{Read, Write};
 use std::process::{Child, Command, ExitStatus, Stdio};
 
-/// The bytes `cmd` takes on stdin from a here-document, if it has one.
-/// By the time a command runs the body has already been expanded.
+/// The bytes `cmd` takes on stdin from a here-document or here-string, if
+/// it has one. By the time a command runs, either has been expanded.
 pub fn here_bytes(cmd: &ast::Command) -> Option<Vec<u8>> {
     cmd.here.as_ref().map(|here| match here {
         HereInput::Document { body, .. } => body.clone().into_bytes(),
+        HereInput::String(text) => format!("{}\n", text).into_bytes(),
     })
 }
 

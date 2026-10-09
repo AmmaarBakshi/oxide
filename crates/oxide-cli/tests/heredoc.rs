@@ -45,3 +45,20 @@ fn a_heredoc_feeds_an_external_program() {
         .run();
     out.assert_ok("from the heredoc\n");
 }
+
+#[test]
+fn a_here_string_feeds_one_line() {
+    run_stdin(
+        "herestring",
+        "X=world\ncat <<< \"hello $X\"\ngrep b <<< 'a b c'\n",
+    )
+    .assert_ok("hello world\na b c\n");
+}
+
+#[test]
+fn a_here_string_feeds_an_external_program() {
+    Oxide::new("herestring-external")
+        .stdin("\"$OXIDE_BIN\" <<< 'echo via here-string'\n")
+        .run()
+        .assert_ok("via here-string\n");
+}

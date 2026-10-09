@@ -162,6 +162,15 @@ mod tests {
     }
 
     #[test]
+    fn a_here_string_belongs_to_its_command() {
+        use crate::ast::HereInput;
+        let cmd = command("grep b <<< \"$X b\" > out");
+        assert_eq!(cmd.args, ["b"]);
+        assert_eq!(cmd.here, Some(HereInput::String("\"$X b\"".into())));
+        assert_eq!(cmd.outfile.as_deref(), Some("out"));
+    }
+
+    #[test]
     fn words_that_only_look_like_assignments_are_commands() {
         for word in ["=x", "1X=2", "\"X\"=1", "A-B=1"] {
             let cmd = command(word);

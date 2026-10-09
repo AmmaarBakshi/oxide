@@ -43,6 +43,14 @@ impl Parser {
                         .here = Some(here);
                     self.cursor += 1;
                 }
+                Token::HereString => {
+                    self.cursor += 1;
+                    if let Some(word) = self.redirect_target() {
+                        current_cmd
+                            .get_or_insert_with(|| Command::new(String::new()))
+                            .here = Some(HereInput::String(word));
+                    }
+                }
                 Token::ErrToOut | Token::OutToErr => {
                     let cmd = current_cmd.get_or_insert_with(|| Command::new(String::new()));
                     if self.tokens[self.cursor] == Token::ErrToOut {

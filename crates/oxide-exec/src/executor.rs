@@ -793,6 +793,7 @@ fn expand_command(cmd: &Command, ctx: &mut dyn Context) -> Command {
             },
             expand: false,
         },
+        HereInput::String(word) => HereInput::String(expand_string(word, ctx)),
     });
 
     Command {

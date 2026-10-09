@@ -21,6 +21,8 @@ pub enum Token {
     OutToErr,          // >&2
     RedirectAll,       // &>
     RedirectAllAppend, // &>>
+    /// `<<<`: the next word is fed to stdin.
+    HereString,
     /// `<<EOF` with the body the lexer collected from the lines after it.
     HereDoc {
         body: String,
@@ -59,6 +61,7 @@ impl fmt::Display for Token {
             Token::RedirectAll => write!(f, "&>"),
             Token::RedirectAllAppend => write!(f, "&>>"),
             Token::HereDoc { .. } => write!(f, "<<"),
+            Token::HereString => write!(f, "<<<"),
             Token::Background => write!(f, "&"), // Add this
             Token::Newline => writeln!(f),
             Token::Semicolon => write!(f, ";"),

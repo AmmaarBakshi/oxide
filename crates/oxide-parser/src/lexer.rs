@@ -113,7 +113,9 @@ impl<'a> Lexer<'a> {
                     tokens.push(token);
                 }
                 '<' => {
-                    if self.eat("<<-") {
+                    if self.eat("<<<") {
+                        tokens.push(Token::HereString);
+                    } else if self.eat("<<-") {
                         self.heredoc(true, &mut tokens);
                     } else if self.eat("<<") {
                         self.heredoc(false, &mut tokens);
@@ -574,6 +576,14 @@ mod tests {
                 body: "2\n".into(),
                 expand: false
             }
+        );
+    }
+
+    #[test]
+    fn three_arrows_are_a_here_string() {
+        assert_eq!(
+            words("grep x <<< \"a x\""),
+            [word("grep"), word("x"), Token::HereString, word("\"a x\"")]
         );
     }
 

@@ -27,6 +27,8 @@ pub enum HereInput {
     /// `<<EOF` ... `EOF`. `expand` is false when the delimiter was quoted
     /// (`<<'EOF'`), which keeps `$` in the body literal.
     Document { body: String, expand: bool },
+    /// `<<< word`: the word, expanded, plus a newline.
+    String(String),
 }
 
 #[derive(Clone, Debug)]
