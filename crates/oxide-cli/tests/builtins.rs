@@ -35,3 +35,15 @@ fn printf_formats_a_table() {
     )
     .assert_ok("item1|  1\nitem10| 10\n");
 }
+
+#[test]
+fn test_and_bracket_report_through_the_status() {
+    let out = Oxide::new("test-bracket")
+        .file("here.txt", "x")
+        .args(&[
+            "-c",
+            "[ -f here.txt ] && echo file; test 3 -gt 5 || echo smaller; [ a = b ]; echo $?",
+        ])
+        .run();
+    out.assert_ok("file\nsmaller\n1\n");
+}

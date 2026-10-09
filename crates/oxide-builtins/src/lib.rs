@@ -46,6 +46,7 @@ pub mod rm;
 pub mod sleep;
 pub mod sort;
 pub mod tail;
+pub mod test;
 pub mod top;
 pub mod touch;
 pub mod type_;
