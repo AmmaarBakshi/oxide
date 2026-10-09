@@ -91,6 +91,14 @@ cargo build --release -p oxide-cli
 
 ## 💡 Usage Examples
 
+### Command-Line Options
+```bash
+oxide                 # start an interactive session
+oxide script.ox       # run a script file
+oxide --version       # print the version (-V)
+oxide --help          # list the options (-h)
+```
+
 ### Basic Commands
 ```bash
 oxide> echo "Hello, Oxide!"
