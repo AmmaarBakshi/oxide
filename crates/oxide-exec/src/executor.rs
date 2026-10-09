@@ -54,7 +54,6 @@ pub struct ExecEnv<'a> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ExecutorBuiltin {
     Call,
-    Greet,
     Import,
     Jail,
     Jobs,
@@ -67,7 +66,6 @@ impl ExecutorBuiltin {
     fn lookup(name: &str) -> Option<Self> {
         Some(match name {
             "call" => Self::Call,
-            "hi" | "hello" => Self::Greet,
             "import" => Self::Import,
             "jail" => Self::Jail,
             "jobs" => Self::Jobs,
@@ -406,15 +404,6 @@ impl Executor {
                         1
                     }
                 }
-            }
-
-            ExecutorBuiltin::Greet => {
-                println!("Hi there! You are running Oxide Shell.");
-                println!("Current Mode: {:?}", *env.mode);
-                if let Some(user) = self.runtime.scope.get("USER") {
-                    println!("Good to see you, {}!", user);
-                }
-                0
             }
 
             ExecutorBuiltin::Refresh => {

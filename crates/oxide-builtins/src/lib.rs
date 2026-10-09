@@ -77,7 +77,7 @@ pub struct Ctx<'a> {
 /// depending on `oxide-exec`. `oxide-exec` has a test asserting it really
 /// handles every name in this list.
 pub const EXECUTOR_BUILTINS: &[&str] = &[
-    "call", "hello", "hi", "import", "jail", "jobs", "mode", "refresh", "source",
+    "call", "import", "jail", "jobs", "mode", "refresh", "source",
 ];
 
 /// Builtins the REPL intercepts before the executor ever sees them.
