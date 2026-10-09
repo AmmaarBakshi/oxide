@@ -1,4 +1,4 @@
-use crate::ast::{Command, Statement};
+use crate::ast::{Assignment, Command, Statement};
 use crate::parser::Parser;
 use crate::token::Token;
 
@@ -11,10 +11,15 @@ impl Parser {
         while self.cursor < self.tokens.len() {
             match &self.tokens[self.cursor] {
                 Token::Word(w) | Token::StringLiteral(w) => {
-                    if let Some(cmd) = &mut current_cmd {
+                    let cmd = current_cmd.get_or_insert_with(|| Command::new(String::new()));
+                    if !cmd.program.is_empty() {
                         cmd.args.push(w.clone());
+                    } else if let Some(assignment) = Assignment::parse(w) {
+                        // Only words before the program can be assignments;
+                        // `echo X=1` just prints its argument.
+                        cmd.assignments.push(assignment);
                     } else {
-                        current_cmd = Some(Command::new(w.clone()));
+                        cmd.program = w.clone();
                     }
                     self.cursor += 1;
                 }

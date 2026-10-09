@@ -662,6 +662,7 @@ fn expand_command(cmd: &Command, ctx: &dyn Context) -> Command {
     Command {
         program,
         args,
+        assignments: cmd.assignments.clone(),
         outfile: cmd.outfile.as_deref().map(|f| expand_string(f, ctx)),
         infile: cmd.infile.as_deref().map(|f| expand_string(f, ctx)),
         append: cmd.append,
