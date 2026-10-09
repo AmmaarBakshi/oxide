@@ -67,7 +67,7 @@ impl Shell {
     // ==========================================
     pub fn run_script(&mut self, file_path: &str) -> anyhow::Result<()> {
         let source = std::fs::read_to_string(file_path)?;
-        self.run_source(&source, true);
+        self.run_source(&source);
         Ok(())
     }
 
@@ -78,27 +78,33 @@ impl Shell {
         // commands run; a builtin reading stdin would otherwise deadlock.
         let mut source = String::new();
         std::io::stdin().read_to_string(&mut source)?;
-        self.run_source(&source, false);
+        self.run_source(&source);
         Ok(())
     }
 
-    /// Runs `source` one line at a time, skipping blanks and comments.
-    fn run_source(&mut self, source: &str, record_history: bool) {
+    /// Runs `source` one complete statement at a time. A statement that
+    /// spans lines — a block, a quoted string, a line ending in `|` — is
+    /// gathered up before it runs. Scripts don't add to the history file.
+    fn run_source(&mut self, source: &str) {
+        let mut pending = String::new();
         for line in source.lines() {
             let trimmed = line.trim();
-
-            if trimmed.is_empty() || trimmed.starts_with('#') {
+            if pending.is_empty() && (trimmed.is_empty() || trimmed.starts_with('#')) {
                 continue;
             }
-
-            if record_history {
-                self.state.history.push(trimmed.to_string());
-                history::append(trimmed);
+            pending.push_str(line);
+            pending.push('\n');
+            if oxide_parser::is_incomplete(&pending) {
+                continue;
             }
-            self.execute_line(trimmed);
+            self.execute_line(&std::mem::take(&mut pending));
             if !self.state.is_running {
-                break;
+                return;
             }
+        }
+        // Whatever is still open at the end runs as it stands.
+        if !pending.is_empty() {
+            self.execute_line(&pending);
         }
     }
 

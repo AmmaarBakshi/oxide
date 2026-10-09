@@ -4,12 +4,42 @@ use std::str::Chars;
 
 pub struct Lexer<'a> {
     input: Peekable<Chars<'a>>,
+    /// Set when the input ran out inside a quote, `$(`, backtick, or right
+    /// after a backslash: more lines would continue it.
+    unterminated: bool,
+}
+
+/// Whether `input` stops in the middle of something and needs more lines to
+/// finish it: an open quote, `$(` or backtick, more `{` than `}`, or a last
+/// line ending in `|`, `&&`, `||` or `\`.
+pub fn is_incomplete(input: &str) -> bool {
+    let mut lexer = Lexer::new(input);
+    let tokens = lexer.tokenize();
+    if lexer.unterminated {
+        return true;
+    }
+    let open_blocks: i32 = tokens
+        .iter()
+        .map(|token| match token {
+            Token::LBrace => 1,
+            Token::RBrace => -1,
+            _ => 0,
+        })
+        .sum();
+    if open_blocks > 0 {
+        return true;
+    }
+    matches!(
+        tokens.iter().rev().find(|token| **token != Token::Newline),
+        Some(Token::Pipe | Token::And | Token::Or)
+    )
 }
 
 impl<'a> Lexer<'a> {
     pub fn new(input: &'a str) -> Self {
         Lexer {
             input: input.chars().peekable(),
+            unterminated: false,
         }
     }
 
@@ -79,6 +109,8 @@ impl<'a> Lexer<'a> {
                     self.input.next();
                     tokens.push(Token::RBrace);
                 }
+                // A `#` starting a word comments out the rest of the line.
+                '#' => while self.input.next_if(|&c| c != '\n').is_some() {},
                 // Everything else starts a word: a command, flag or path.
                 _ => {
                     let word = self.word();
@@ -128,13 +160,21 @@ impl<'a> Lexer<'a> {
                 '\\' => {
                     self.input.next();
                     match self.input.next() {
-                        // A backslash-newline joins two lines into one.
-                        Some('\n') => {}
+                        // A backslash-newline joins two lines into one; at the
+                        // very end of the input, the next line is still to come.
+                        Some('\n') => {
+                            if self.input.peek().is_none() {
+                                self.unterminated = true;
+                            }
+                        }
                         Some(next) => {
                             word.push('\\');
                             word.push(next);
                         }
-                        None => word.push('\\'),
+                        None => {
+                            word.push('\\');
+                            self.unterminated = true;
+                        }
                     }
                 }
                 // Keep a `${...}` expansion intact even though `{`/`}` are
@@ -172,7 +212,11 @@ impl<'a> Lexer<'a> {
     fn quoted(&mut self, quote: char, word: &mut String) {
         word.push(quote);
         self.input.next();
-        while let Some(c) = self.input.next() {
+        loop {
+            let Some(c) = self.input.next() else {
+                self.unterminated = true;
+                break;
+            };
             word.push(c);
             if c == quote {
                 break;
@@ -208,7 +252,11 @@ impl<'a> Lexer<'a> {
     /// Copies the rest of a backtick substitution whose opening backtick is
     /// already on `word`, up to and including the closing one.
     fn rest_of_backticks(&mut self, word: &mut String) {
-        while let Some(c) = self.input.next() {
+        loop {
+            let Some(c) = self.input.next() else {
+                self.unterminated = true;
+                break;
+            };
             word.push(c);
             match c {
                 '`' => break,
@@ -248,9 +296,10 @@ impl<'a> Lexer<'a> {
             word.push(c);
             self.input.next();
             if depth == 0 {
-                break;
+                return;
             }
         }
+        self.unterminated = true;
     }
 }
 
@@ -366,6 +415,55 @@ mod tests {
             words("echo \"a `b \\` c` d\""),
             [word("echo"), word("\"a `b \\` c` d\"")]
         );
+    }
+
+    #[test]
+    fn hash_starts_a_comment_only_at_the_start_of_a_word() {
+        assert_eq!(
+            words("echo a#b # the rest\necho c"),
+            [
+                word("echo"),
+                word("a#b"),
+                Token::Newline,
+                word("echo"),
+                word("c")
+            ]
+        );
+        assert_eq!(words("echo '# kept'"), [word("echo"), word("'# kept'")]);
+    }
+
+    #[test]
+    fn unfinished_input_is_incomplete() {
+        for input in [
+            "echo 'open",
+            "echo \"open",
+            "echo $(open",
+            "echo `open",
+            "if 1 {",
+            "if 1 { if 2 {\n}",
+            "ls |",
+            "true &&\n",
+            "false ||",
+            "echo a \\",
+            "echo a \\\n",
+        ] {
+            assert!(is_incomplete(input), "{input:?} should be incomplete");
+        }
+    }
+
+    #[test]
+    fn finished_input_is_complete() {
+        for input in [
+            "echo 'closed'",
+            "echo $(a) `b`",
+            "if 1 { echo }",
+            "ls | wc",
+            "echo # open quote ' in a comment",
+            "echo a \\\n b",
+            "",
+        ] {
+            assert!(!is_incomplete(input), "{input:?} should be complete");
+        }
     }
 
     #[test]

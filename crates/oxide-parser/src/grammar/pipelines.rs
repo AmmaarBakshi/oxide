@@ -28,6 +28,10 @@ impl Parser {
                         pipeline.push(cmd);
                     }
                     self.cursor += 1;
+                    // A pipe at the end of a line carries on to the next.
+                    while self.tokens.get(self.cursor) == Some(&Token::Newline) {
+                        self.cursor += 1;
+                    }
                 }
                 Token::ErrToOut | Token::OutToErr => {
                     let cmd = current_cmd.get_or_insert_with(|| Command::new(String::new()));
