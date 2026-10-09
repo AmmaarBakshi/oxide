@@ -64,6 +64,37 @@ pub fn expand_string(word: &str, ctx: &mut dyn Context) -> String {
         .unwrap_or_default()
 }
 
+/// Expands a here-document body: `$` expansions and command substitutions
+/// are replaced, and a backslash escapes `$`, `` ` ``, `\` or a newline.
+/// Everything else, quotes included, is kept as written.
+pub fn expand_heredoc(body: &str, ctx: &mut dyn Context) -> String {
+    let mut out = String::new();
+    let mut chars = body.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' => match chars.peek() {
+                Some('\n') => {
+                    chars.next();
+                }
+                Some(&next @ ('$' | '`' | '\\')) => {
+                    chars.next();
+                    out.push(next);
+                }
+                _ => out.push(c),
+            },
+            '$' => match dollar(&mut chars, ctx) {
+                Dollar::Value(text) | Dollar::Literal(text) => out.push_str(&text),
+            },
+            '`' => {
+                let command = backtick_body(&mut chars);
+                out.push_str(ctx.substitute(&command).trim_end_matches(['\n', '\r']));
+            }
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
 /// One output field under construction.
 #[derive(Default)]
 struct Field {
@@ -467,6 +498,17 @@ mod tests {
         assert_eq!(string("$(a (b) c)"), "<a (b) c>");
         assert_eq!(string("$(echo ')' \")\")"), "<echo ')' \")\">");
         assert_eq!(string("\"$(echo \"x y\")\""), "<echo \"x y\">");
+    }
+
+    #[test]
+    fn heredoc_bodies_expand_dollars_but_keep_quotes() {
+        env::set_var("OXIDE_TEST_HEREDOC", "v");
+        let mut ctx = Status(0);
+        assert_eq!(
+            expand_heredoc("'$OXIDE_TEST_HEREDOC' \"$(x)\" \\$no `y`\n", &mut ctx),
+            "'v' \"<x>\" $no <y>\n"
+        );
+        assert_eq!(expand_heredoc("a\\\nb \\q\n", &mut ctx), "ab \\q\n");
     }
 
     #[test]

@@ -17,8 +17,8 @@ use std::io::{Read, Write};
 
 use oxide_builtins::{Ctx, Io};
 use oxide_compat::CompatMode;
-use oxide_parser::ast::{Assignment, Command, Condition, Statement};
-use oxide_parser::expand::{expand_string, expand_word, Context};
+use oxide_parser::ast::{Assignment, Command, Condition, HereInput, Statement};
+use oxide_parser::expand::{expand_heredoc, expand_string, expand_word, Context};
 use oxide_parser::lexer::Lexer;
 use oxide_parser::parser::Parser;
 use oxide_perf::cache::CommandCache;
@@ -396,15 +396,11 @@ impl Executor {
         }
 
         if let Some(builtin) = oxide_builtins::registry().get(&cmd.program) {
-            let (code, _) = run_builtin_stage(
-                builtin,
-                &cmd.args,
-                Upstream::None,
-                cmd,
-                true,
-                &mut self.vars,
-                env,
-            );
+            let input = crate::process::here_bytes(cmd)
+                .map(Upstream::Buffer)
+                .unwrap_or(Upstream::None);
+            let (code, _) =
+                run_builtin_stage(builtin, &cmd.args, input, cmd, true, &mut self.vars, env);
             *env.last_exit_code = code;
             return;
         }
@@ -647,6 +643,11 @@ impl Executor {
             // A prefix assignment applies to its own stage only.
             let _prefix = self.prefix_env(&cmd.assignments, env);
 
+            // A here-document replaces whatever the previous stage sent.
+            if let Some(bytes) = crate::process::here_bytes(cmd) {
+                upstream = Upstream::Buffer(bytes);
+            }
+
             if !self.check_permission(&cmd.program, &cmd.args, env) {
                 break;
             }
@@ -781,6 +782,19 @@ fn expand_command(cmd: &Command, ctx: &mut dyn Context) -> Command {
     let infile = target(&cmd.infile);
     let errfile = target(&cmd.errfile);
 
+    // A here-document's body is expanded now, unless its delimiter was
+    // quoted; either way what is left is fed to stdin as it stands.
+    let here = cmd.here.as_ref().map(|here| match here {
+        HereInput::Document { body, expand } => HereInput::Document {
+            body: if *expand {
+                expand_heredoc(body, ctx)
+            } else {
+                body.clone()
+            },
+            expand: false,
+        },
+    });
+
     Command {
         program,
         args,
@@ -792,7 +806,7 @@ fn expand_command(cmd: &Command, ctx: &mut dyn Context) -> Command {
         err_append: cmd.err_append,
         err_to_out: cmd.err_to_out,
         out_to_err: cmd.out_to_err,
-        here: cmd.here.clone(),
+        here,
     }
 }
 

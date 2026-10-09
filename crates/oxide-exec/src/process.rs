@@ -1,8 +1,16 @@
 use crate::pipeline::SharedBuf;
 use crate::redirect;
-use oxide_parser::ast;
-use std::io::Read;
-use std::process::{Child, Command, ExitStatus};
+use oxide_parser::ast::{self, HereInput};
+use std::io::{Read, Write};
+use std::process::{Child, Command, ExitStatus, Stdio};
+
+/// The bytes `cmd` takes on stdin from a here-document, if it has one.
+/// By the time a command runs the body has already been expanded.
+pub fn here_bytes(cmd: &ast::Command) -> Option<Vec<u8>> {
+    cmd.here.as_ref().map(|here| match here {
+        HereInput::Document { body, .. } => body.clone().into_bytes(),
+    })
+}
 
 /// The shell-visible status of a finished process.
 ///
@@ -48,7 +56,12 @@ pub fn spawn_single(
             return 1;
         }
     };
-    redirect::apply_input(&mut process, &cmd.infile);
+    let input = here_bytes(cmd);
+    if input.is_some() {
+        process.stdin(Stdio::piped());
+    } else {
+        redirect::apply_input(&mut process, &cmd.infile);
+    }
     redirect::apply_outputs(&mut process, cmd, writer);
 
     let spawned = process.spawn();
@@ -57,18 +70,29 @@ pub fn spawn_single(
     drop(process);
     match spawned {
         Ok(mut child) => {
+            // Feed a here-document from a thread, so a body bigger than the
+            // pipe can hold doesn't deadlock against the child's output.
+            let feeder = input.zip(child.stdin.take()).map(|(bytes, mut sink)| {
+                std::thread::spawn(move || {
+                    let _ = sink.write_all(&bytes);
+                })
+            });
             if let (Some(mut reader), Some(capture)) = (reader, capture) {
                 let mut bytes = Vec::new();
                 let _ = reader.read_to_end(&mut bytes);
                 capture.push(&bytes);
             }
-            match child.wait() {
+            let status = match child.wait() {
                 Ok(status) => status_code(status),
                 Err(e) => {
                     eprintln!("oxide: {}: failed to wait: {}", program, e);
                     1
                 }
+            };
+            if let Some(feeder) = feeder {
+                let _ = feeder.join();
             }
+            status
         }
         Err(_) => {
             let message = format!("oxide: command not found: {}", program);

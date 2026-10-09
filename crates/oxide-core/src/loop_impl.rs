@@ -41,7 +41,16 @@ impl Shell {
                     rl.add_history_entry(trimmed)?;
                     self.state.history.push(trimmed.to_string());
                     history::append(trimmed);
-                    self.execute_line(trimmed);
+
+                    // `cat <<EOF` on its own: the body comes on the lines
+                    // typed next, up to the delimiter.
+                    let mut input = trimmed.to_string();
+                    for delimiter in oxide_parser::lexer::unfinished_heredocs(&input) {
+                        input.push('\n');
+                        input.push_str(&oxide_parser::heredoc::read_payload(&delimiter));
+                        input.push_str(&delimiter);
+                    }
+                    self.execute_line(&input);
                 }
                 Err(ReadlineError::Interrupted) => {
                     println!("^C");

@@ -12,6 +12,16 @@ pub struct Lexer<'a> {
     /// collect their bodies: the index of each `HereDoc` token, and its
     /// delimiter.
     pending_heredocs: Vec<(usize, Delimiter)>,
+    /// Delimiters of here-documents whose terminating line never came.
+    unfinished_heredocs: Vec<String>,
+}
+
+/// The delimiters of here-documents in `input` that are still waiting for
+/// their terminating line, so the REPL knows to ask for the body.
+pub fn unfinished_heredocs(input: &str) -> Vec<String> {
+    let mut lexer = Lexer::new(input);
+    lexer.tokenize();
+    lexer.unfinished_heredocs
 }
 
 /// Whether `input` stops in the middle of something and needs more lines to
@@ -47,6 +57,7 @@ impl<'a> Lexer<'a> {
             input: input.chars().peekable(),
             unterminated: false,
             pending_heredocs: Vec::new(),
+            unfinished_heredocs: Vec::new(),
         }
     }
 
@@ -148,8 +159,8 @@ impl<'a> Lexer<'a> {
             }
         }
         // A here-document whose line never ended has no body yet.
-        if !self.pending_heredocs.is_empty() {
-            self.pending_heredocs.clear();
+        for (_, delimiter) in std::mem::take(&mut self.pending_heredocs) {
+            self.unfinished_heredocs.push(delimiter.word);
             self.unterminated = true;
         }
         tokens
@@ -176,6 +187,7 @@ impl<'a> Lexer<'a> {
             let (body, found) = heredoc::collect_body(lines, &delimiter);
             if !found {
                 self.unterminated = true;
+                self.unfinished_heredocs.push(delimiter.word.clone());
             }
             tokens[index] = Token::HereDoc {
                 body,
@@ -563,6 +575,16 @@ mod tests {
                 expand: false
             }
         );
+    }
+
+    #[test]
+    fn unfinished_heredocs_are_listed() {
+        assert_eq!(
+            unfinished_heredocs("cat <<EOF; cat <<'END'"),
+            ["EOF", "END"]
+        );
+        assert_eq!(unfinished_heredocs("cat <<EOF\nhalf\n"), ["EOF"]);
+        assert!(unfinished_heredocs("cat <<EOF\nEOF").is_empty());
     }
 
     #[test]
