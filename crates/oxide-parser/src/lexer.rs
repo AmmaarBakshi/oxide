@@ -124,6 +124,7 @@ impl<'a> Lexer<'a> {
         while let Some(&c) = self.input.peek() {
             match c {
                 '\'' | '"' => self.quoted(c, &mut word),
+                '`' => self.backticks(&mut word),
                 '\\' => {
                     self.input.next();
                     match self.input.next() {
@@ -188,8 +189,35 @@ impl<'a> Lexer<'a> {
                     // ...and a substitution may hold quotes of its own:
                     // "$(echo "hi")" is one word.
                     '$' if self.input.peek() == Some(&'(') => self.substitution(word),
+                    '`' => self.rest_of_backticks(word),
                     _ => {}
                 }
+            }
+        }
+    }
+
+    /// Copies a `` `...` `` command substitution onto `word`, backticks
+    /// included. A backslash keeps the character after it, so `` \` `` does
+    /// not end it.
+    fn backticks(&mut self, word: &mut String) {
+        word.push('`');
+        self.input.next();
+        self.rest_of_backticks(word);
+    }
+
+    /// Copies the rest of a backtick substitution whose opening backtick is
+    /// already on `word`, up to and including the closing one.
+    fn rest_of_backticks(&mut self, word: &mut String) {
+        while let Some(c) = self.input.next() {
+            word.push(c);
+            match c {
+                '`' => break,
+                '\\' => {
+                    if let Some(next) = self.input.next() {
+                        word.push(next);
+                    }
+                }
+                _ => {}
             }
         }
     }
@@ -325,6 +353,18 @@ mod tests {
         assert_eq!(
             words("echo \"$(echo \"hi there\")\" x"),
             [word("echo"), word("\"$(echo \"hi there\")\""), word("x")]
+        );
+    }
+
+    #[test]
+    fn backticks_are_one_word() {
+        assert_eq!(
+            words("echo `ls -a | wc` x"),
+            [word("echo"), word("`ls -a | wc`"), word("x")]
+        );
+        assert_eq!(
+            words("echo \"a `b \\` c` d\""),
+            [word("echo"), word("\"a `b \\` c` d\"")]
         );
     }
 

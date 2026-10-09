@@ -50,3 +50,12 @@ fn a_substitution_cannot_change_the_shell_around_it() {
     )
     .assert_ok("outer inner\nstill here 3\n");
 }
+
+#[test]
+fn backticks_are_command_substitution_too() {
+    run_c(
+        "subst-backticks",
+        "X=`echo a  b`; echo \"[$X]\" [`echo hi`]",
+    )
+    .assert_ok("[a b] [hi]\n");
+}

@@ -195,6 +195,12 @@ fn expand(word: &str, split: bool, ctx: &mut dyn Context) -> Vec<Field> {
                 Dollar::Value(value) => out.push_value(&value, in_double),
                 Dollar::Literal(text) => out.push_str(&text, in_double),
             },
+            // `` `command` ``: the older spelling of `$(command)`.
+            '`' => {
+                let command = backtick_body(&mut chars);
+                let output = ctx.substitute(&command);
+                out.push_value(output.trim_end_matches(['\n', '\r']), in_double);
+            }
             c => out.push(c, in_double),
         }
     }
@@ -257,6 +263,27 @@ fn dollar(chars: &mut Peekable<Chars<'_>>, ctx: &mut dyn Context) -> Dollar {
         }
         _ => Dollar::Literal("$".to_string()),
     }
+}
+
+/// Reads the body of a `` `...` `` whose opening backtick is already
+/// consumed, up to the closing one. A backslash before `` ` ``, `\` or `$`
+/// stands for that character; before anything else it is kept.
+fn backtick_body(chars: &mut Peekable<Chars<'_>>) -> String {
+    let mut body = String::new();
+    while let Some(c) = chars.next() {
+        match c {
+            '`' => break,
+            '\\' => match chars.peek() {
+                Some(&next @ ('`' | '\\' | '$')) => {
+                    chars.next();
+                    body.push(next);
+                }
+                _ => body.push(c),
+            },
+            _ => body.push(c),
+        }
+    }
+    body
 }
 
 /// Reads the body of a `$(...)` whose `$(` is already consumed, up to the
@@ -424,6 +451,15 @@ mod tests {
         // Unquoted, the output is split into words; quoted, it is not.
         assert_eq!(words("$(a b)"), ["<a", "b>"]);
         assert_eq!(words("\"$(a  b)\""), ["<a  b>"]);
+    }
+
+    #[test]
+    fn backticks_substitute_like_dollar_parens() {
+        assert_eq!(string("x`a b`y"), "x<a b>y");
+        assert_eq!(words("`a b`"), ["<a", "b>"]);
+        assert_eq!(words("\"`a  b`\""), ["<a  b>"]);
+        assert_eq!(string("`echo \\`inner\\``"), "<echo `inner`>");
+        assert_eq!(string("'`not run`'"), "`not run`");
     }
 
     #[test]
