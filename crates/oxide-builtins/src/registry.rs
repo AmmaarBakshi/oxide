@@ -96,6 +96,7 @@ macro_rules! declare_builtins {
 
 declare_builtins! {
     Bracket => "[",     crate::test::run_bracket, "evaluate a test expression: [ EXPR ]";
+    Colon  => ":",      crate::truth::run_true,  "do nothing, successfully";
     Alias  => "alias",  crate::alias::run,   "define or list command aliases";
     Cat    => "cat",    crate::cat::run,     "concatenate files, or stdin, to stdout";
     Cd     => "cd",     crate::cd::run,      "change the working directory";
@@ -105,6 +106,7 @@ declare_builtins! {
     Echo   => "echo",   crate::echo::run,    "write arguments to stdout";
     Env    => "env",    crate::env::run,     "print the environment";
     Export => "export", crate::export::run,  "set an environment variable (KEY=VALUE)";
+    False  => "false",  crate::truth::run_false, "do nothing, unsuccessfully";
     Find   => "find",   crate::find::run,    "search a directory tree for matching names";
     Grep   => "grep",   crate::grep::run,    "print lines matching a pattern";
     Head   => "head",   crate::head::run,    "print the first lines of files or stdin";
@@ -126,6 +128,7 @@ declare_builtins! {
     Test   => "test",   crate::test::run_test, "check files, strings and numbers (-f, =, -lt, ...)";
     Top    => "top",    crate::top::run,     "show the busiest processes";
     Touch  => "touch",  crate::touch::run,   "create files if they do not exist";
+    True   => "true",   crate::truth::run_true,  "do nothing, successfully";
     Type   => "type",   crate::type_::run,   "say what a command name means (-a all, -t kind only)";
     Uniq   => "uniq",   crate::uniq::run,    "collapse adjacent duplicate lines";
     Unset  => "unset",  crate::unset::run,   "remove an environment variable";

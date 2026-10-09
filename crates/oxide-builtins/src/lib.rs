@@ -49,6 +49,7 @@ pub mod tail;
 pub mod test;
 pub mod top;
 pub mod touch;
+pub mod truth;
 pub mod type_;
 pub mod uniq;
 pub mod unset;
