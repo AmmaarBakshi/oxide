@@ -1,4 +1,5 @@
 pub mod ast;
+pub mod braces;
 pub mod expand;
 pub mod glob;
 pub mod grammar;

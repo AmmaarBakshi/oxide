@@ -2,6 +2,8 @@
 //!
 //! A word arrives exactly as it was typed, quotes and all. Expanding it:
 //!
+//! 0. multiplies out unquoted braces, `a{1,2}` to `a1 a2` (see
+//!    [`crate::braces`]);
 //! 1. replaces a leading `~` with the home directory;
 //! 2. replaces `$NAME` and `${NAME}` with the variable's value;
 //! 3. splits the result of an unquoted `$` expansion into separate fields
@@ -40,15 +42,17 @@ pub trait Context {
 /// several (`$LIST`, `*.rs`).
 pub fn expand_word(word: &str, ctx: &mut dyn Context) -> Vec<String> {
     let mut fields = Vec::new();
-    for field in expand(word, true, ctx) {
-        if field.has_glob {
-            let matches = crate::glob::matches(&field.pattern);
-            if !matches.is_empty() {
-                fields.extend(matches);
-                continue;
+    for word in crate::braces::expand(word) {
+        for field in expand(&word, true, ctx) {
+            if field.has_glob {
+                let matches = crate::glob::matches(&field.pattern);
+                if !matches.is_empty() {
+                    fields.extend(matches);
+                    continue;
+                }
             }
+            fields.push(field.text);
         }
-        fields.push(field.text);
     }
     fields
 }
@@ -509,6 +513,16 @@ mod tests {
             "'v' \"<x>\" $no <y>\n"
         );
         assert_eq!(expand_heredoc("a\\\nb \\q\n", &mut ctx), "ab \\q\n");
+    }
+
+    #[test]
+    fn braces_expand_before_variables() {
+        env::set_var("OXIDE_TEST_BRACES", "v");
+        assert_eq!(words("${OXIDE_TEST_BRACES}{1,2}"), ["v1", "v2"]);
+        // As in bash, a bare name runs on into the braces: `$X{1,2}` is `$X1 $X2`.
+        assert!(words("$OXIDE_TEST_BRACES{1,2}").is_empty());
+        // Assignments and other single strings are not brace-expanded.
+        assert_eq!(string("{1,2}"), "{1,2}");
     }
 
     #[test]

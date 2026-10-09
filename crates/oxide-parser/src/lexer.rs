@@ -128,7 +128,9 @@ impl<'a> Lexer<'a> {
                     self.input.next();
                     tokens.push(Token::Newline);
                 }
-                '{' => {
+                // A `{` on its own opens a block; one with text right after it
+                // starts a word to brace-expand, like `{a,b}`.
+                '{' if self.brace_stands_alone() => {
                     self.input.next();
                     tokens.push(Token::LBrace);
                 }
@@ -211,6 +213,14 @@ impl<'a> Lexer<'a> {
         Some(line)
     }
 
+    /// Whether the `{` about to be read is followed by whitespace or the end
+    /// of the input, which makes it a block's opening brace.
+    fn brace_stands_alone(&self) -> bool {
+        let mut ahead = self.input.clone();
+        ahead.next();
+        ahead.peek().is_none_or(|c| c.is_whitespace() || *c == ';')
+    }
+
     /// Consumes `s` if the input continues with it, and says whether it did.
     fn eat(&mut self, s: &str) -> bool {
         let mut ahead = self.input.clone();
@@ -228,8 +238,21 @@ impl<'a> Lexer<'a> {
     /// lets `NAME="two words"` stay a single word and `'$HOME'` stay literal.
     fn word(&mut self) -> String {
         let mut word = String::new();
+        // Braces opened inside this word, so `{a,b}` keeps its `}` while a
+        // bare `}` still closes a block.
+        let mut braces = 0;
         while let Some(&c) = self.input.peek() {
             match c {
+                '{' => {
+                    braces += 1;
+                    word.push(c);
+                    self.input.next();
+                }
+                '}' if braces > 0 => {
+                    braces -= 1;
+                    word.push(c);
+                    self.input.next();
+                }
                 '\'' | '"' => self.quoted(c, &mut word),
                 '`' => self.backticks(&mut word),
                 '\\' => {
@@ -272,7 +295,7 @@ impl<'a> Lexer<'a> {
                         _ => {}
                     }
                 }
-                c if c.is_whitespace() || "><|&;{}".contains(c) => break,
+                c if c.is_whitespace() || "><|&;}".contains(c) => break,
                 _ => {
                     word.push(c);
                     self.input.next();
@@ -603,6 +626,30 @@ mod tests {
         assert!(is_incomplete("cat <<EOF\nbody\n"));
         assert!(!is_incomplete("cat <<EOF\nbody\nEOF\n"));
         assert!(!is_incomplete("cat <<-EOF\n\tbody\n\tEOF"));
+    }
+
+    #[test]
+    fn braces_in_a_word_are_text_but_alone_they_are_a_block() {
+        assert_eq!(
+            words("echo {a,b} pre{x,y}post {}"),
+            [
+                word("echo"),
+                word("{a,b}"),
+                word("pre{x,y}post"),
+                word("{}")
+            ]
+        );
+        assert_eq!(
+            words("if 1 { echo x{1,2} }"),
+            [
+                word("if"),
+                word("1"),
+                Token::LBrace,
+                word("echo"),
+                word("x{1,2}"),
+                Token::RBrace
+            ]
+        );
     }
 
     #[test]
