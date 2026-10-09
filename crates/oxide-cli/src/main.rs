@@ -68,7 +68,12 @@ fn main() -> Result<ExitCode> {
         Action::Repl => shell.run_stdin()?,
     }
 
-    let status = shell.state.exit_status.unwrap_or(0);
+    // Without an explicit `exit`, the shell exits with the status of the
+    // last command it ran.
+    let status = shell
+        .state
+        .exit_status
+        .unwrap_or(shell.state.last_exit_code);
     Ok(ExitCode::from(status as u8))
 }
 

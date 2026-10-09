@@ -1,5 +1,23 @@
 use crate::redirect;
-use std::process::{Child, Command};
+use std::process::{Child, Command, ExitStatus};
+
+/// The shell-visible status of a finished process.
+///
+/// A process killed by a signal has no exit code; like other shells we
+/// report it as 128 plus the signal number (so SIGKILL is 137).
+pub fn status_code(status: ExitStatus) -> i32 {
+    if let Some(code) = status.code() {
+        return code;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        if let Some(signal) = status.signal() {
+            return 128 + signal;
+        }
+    }
+    1
+}
 
 /// Runs a single command and returns its exit code
 pub fn spawn_single(
@@ -17,10 +35,13 @@ pub fn spawn_single(
     redirect::apply_output(&mut process, outfile, append);
 
     match process.spawn() {
-        Ok(mut child) => {
-            let status = child.wait().expect("failed to wait");
-            status.code().unwrap_or(1)
-        }
+        Ok(mut child) => match child.wait() {
+            Ok(status) => status_code(status),
+            Err(e) => {
+                eprintln!("oxide: {}: failed to wait: {}", program, e);
+                1
+            }
+        },
         Err(_) => {
             eprintln!("oxide: command not found: {}", program);
             127

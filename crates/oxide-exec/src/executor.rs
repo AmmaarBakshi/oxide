@@ -222,9 +222,15 @@ impl Executor {
                 }
                 if let Some(else_statements) = else_body {
                     self.execute_statements(else_statements, env);
+                } else {
+                    // No branch ran, which counts as success.
+                    *env.last_exit_code = 0;
                 }
             }
             Statement::While { condition, body } => {
+                // A loop whose body never runs succeeds; otherwise its status
+                // is that of the last command the body ran.
+                *env.last_exit_code = 0;
                 while self.exit_status.is_none() && self.evaluate_if_condition(condition) {
                     self.execute_statements(body, env);
                 }
@@ -234,6 +240,7 @@ impl Executor {
                 values,
                 body,
             } => {
+                *env.last_exit_code = 0;
                 for val in values {
                     // Expand variables (e.g. $VAR) and globs (e.g. *.txt)
                     let expanded_val = oxide_parser::expand::expand_text(val);
@@ -581,7 +588,7 @@ impl Executor {
         let last = spawned.len().saturating_sub(1);
         for (idx, mut stage) in spawned.into_iter().enumerate() {
             let code = match stage.child.wait() {
-                Ok(status) => status.code().unwrap_or(1),
+                Ok(status) => crate::process::status_code(status),
                 Err(e) => {
                     eprintln!("oxide: pipeline: failed to wait: {}", e);
                     1
