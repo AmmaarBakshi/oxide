@@ -8,8 +8,13 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-authors = ["Your Name <you@example.com>"]
+authors = ["Ammaar Bakshi <the.ammaar.ic@gmail.com>"]
 description = "A modern, high-performance shell written in Rust."
+license = "MIT"
+repository = "https://github.com/AmmaarBakshi/oxide"
+homepage = "https://github.com/AmmaarBakshi/oxide"
+keywords = ["shell", "terminal", "cli", "repl"]
+categories = ["command-line-utilities"]
 
 # Common dependencies to save time in sub-crates
 [workspace.dependencies]
