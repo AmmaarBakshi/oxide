@@ -137,17 +137,23 @@ impl<'a> Lexer<'a> {
                     }
                 }
                 // Keep a `${...}` expansion intact even though `{`/`}` are
-                // otherwise block delimiters — it belongs to this word.
+                // otherwise block delimiters — it belongs to this word. The
+                // same goes for a `$(...)` command substitution and the
+                // spaces, pipes and quotes inside it.
                 '$' => {
                     word.push(c);
                     self.input.next();
-                    if self.input.peek() == Some(&'{') {
-                        for b in self.input.by_ref() {
-                            word.push(b);
-                            if b == '}' {
-                                break;
+                    match self.input.peek() {
+                        Some('{') => {
+                            for b in self.input.by_ref() {
+                                word.push(b);
+                                if b == '}' {
+                                    break;
+                                }
                             }
                         }
+                        Some('(') => self.substitution(&mut word),
+                        _ => {}
                     }
                 }
                 c if c.is_whitespace() || "><|&;{}".contains(c) => break,
@@ -170,11 +176,51 @@ impl<'a> Lexer<'a> {
             if c == quote {
                 break;
             }
-            // Inside double quotes a backslash can escape the closing quote.
-            if c == '\\' && quote == '"' {
-                if let Some(next) = self.input.next() {
-                    word.push(next);
+            if quote == '"' {
+                match c {
+                    // Inside double quotes a backslash can escape the
+                    // closing quote...
+                    '\\' => {
+                        if let Some(next) = self.input.next() {
+                            word.push(next);
+                        }
+                    }
+                    // ...and a substitution may hold quotes of its own:
+                    // "$(echo "hi")" is one word.
+                    '$' if self.input.peek() == Some(&'(') => self.substitution(word),
+                    _ => {}
                 }
+            }
+        }
+    }
+
+    /// Copies a `$(...)` command substitution onto `word`, from its `(` to
+    /// the `)` that balances it, skipping over parentheses inside quotes.
+    /// An unbalanced one runs to the end of the input.
+    fn substitution(&mut self, word: &mut String) {
+        let mut depth = 0;
+        while let Some(&c) = self.input.peek() {
+            match c {
+                '\'' | '"' => {
+                    self.quoted(c, word);
+                    continue;
+                }
+                '\\' => {
+                    word.push(c);
+                    self.input.next();
+                    if let Some(next) = self.input.next() {
+                        word.push(next);
+                    }
+                    continue;
+                }
+                '(' => depth += 1,
+                ')' => depth -= 1,
+                _ => {}
+            }
+            word.push(c);
+            self.input.next();
+            if depth == 0 {
+                break;
             }
         }
     }
@@ -255,6 +301,30 @@ mod tests {
                 Token::And,
                 word("c")
             ]
+        );
+    }
+
+    #[test]
+    fn command_substitution_is_one_word() {
+        assert_eq!(
+            words("echo $(ls -a | grep x; echo y) done"),
+            [
+                word("echo"),
+                word("$(ls -a | grep x; echo y)"),
+                word("done")
+            ]
+        );
+        assert_eq!(
+            words("X=pre$(a $(b c) ')' \"(\")post"),
+            [word("X=pre$(a $(b c) ')' \"(\")post")]
+        );
+    }
+
+    #[test]
+    fn command_substitution_inside_double_quotes_keeps_its_quotes() {
+        assert_eq!(
+            words("echo \"$(echo \"hi there\")\" x"),
+            [word("echo"), word("\"$(echo \"hi there\")\""), word("x")]
         );
     }
 
