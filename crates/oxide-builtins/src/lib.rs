@@ -38,6 +38,7 @@ pub mod ls;
 pub mod mkdir;
 pub mod mv;
 pub mod open;
+pub mod printf;
 pub mod ps;
 pub mod pwd;
 pub mod read;

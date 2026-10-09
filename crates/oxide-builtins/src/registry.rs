@@ -114,6 +114,7 @@ declare_builtins! {
     Mkdir  => "mkdir",  crate::mkdir::run,   "create directories";
     Mv     => "mv",     crate::mv::run,      "move or rename files and directories";
     Open   => "open",   crate::open::run,    "read a file, parsing JSON and CSV structurally";
+    Printf => "printf", crate::printf::run,  "print arguments according to a format";
     Ps     => "ps",     crate::ps::run,      "list running processes";
     Pwd    => "pwd",    crate::pwd::run,     "print the working directory";
     Read   => "read",   crate::read::run,    "read a line of stdin into variables (-r, -p)";

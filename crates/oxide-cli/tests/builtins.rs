@@ -26,3 +26,12 @@ fn read_fails_at_end_of_input() {
         .run()
         .assert_ok("1\n");
 }
+
+#[test]
+fn printf_formats_a_table() {
+    run_c(
+        "printf-table",
+        "for n in 1 10 { printf '%-4s|%3d\\n' item$n $n }",
+    )
+    .assert_ok("item1|  1\nitem10| 10\n");
+}
