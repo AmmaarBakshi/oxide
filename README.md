@@ -95,6 +95,7 @@ cargo build --release -p oxide-cli
 ```bash
 oxide                 # start an interactive session
 oxide script.ox       # run a script file
+oxide -c 'echo hi'    # run one command and exit with its status
 oxide --version       # print the version (-V)
 oxide --help          # list the options (-h)
 ```

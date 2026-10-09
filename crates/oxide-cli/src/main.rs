@@ -5,10 +5,12 @@ use std::process::ExitCode;
 
 const USAGE: &str = "\
 Usage: oxide [OPTIONS] [SCRIPT]
+       oxide -c COMMAND
 
 Runs SCRIPT, or starts an interactive session when no script is given.
 
 Options:
+  -c COMMAND       Run COMMAND and exit with its status
   -h, --help       Print this help and exit
   -V, --version    Print the version and exit
 ";
@@ -18,6 +20,7 @@ Options:
 enum Action {
     Help,
     Version,
+    Command(String),
     Script(String),
     Repl,
 }
@@ -27,6 +30,10 @@ fn parse_args(args: &[String]) -> Result<Action, String> {
         None => Ok(Action::Repl),
         Some("-h" | "--help") => Ok(Action::Help),
         Some("-V" | "--version") => Ok(Action::Version),
+        Some("-c") => match args.get(1) {
+            Some(command) => Ok(Action::Command(command.clone())),
+            None => Err("option '-c' requires an argument".to_string()),
+        },
         Some(flag) if flag.starts_with('-') && flag != "-" => {
             Err(format!("unknown option '{}'", flag))
         }
@@ -49,6 +56,10 @@ fn main() -> Result<ExitCode> {
     match action {
         Action::Help => print!("{}", USAGE),
         Action::Version => println!("oxide {}", env!("CARGO_PKG_VERSION")),
+        Action::Command(command) => {
+            let status = Shell::new().run_command(&command);
+            return Ok(ExitCode::from(status as u8));
+        }
         Action::Script(path) => Shell::new().run_script(&path)?,
         Action::Repl => Shell::new().run_repl()?,
     }
@@ -76,6 +87,18 @@ mod tests {
         assert_eq!(parse(&["--help"]), Ok(Action::Help));
         assert_eq!(parse(&["-V"]), Ok(Action::Version));
         assert_eq!(parse(&["--version"]), Ok(Action::Version));
+    }
+
+    #[test]
+    fn dash_c_takes_the_next_argument_as_a_command() {
+        assert_eq!(
+            parse(&["-c", "echo hi"]),
+            Ok(Action::Command("echo hi".into()))
+        );
+        assert_eq!(
+            parse(&["-c"]),
+            Err("option '-c' requires an argument".into())
+        );
     }
 
     #[test]

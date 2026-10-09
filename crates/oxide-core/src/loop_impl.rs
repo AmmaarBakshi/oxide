@@ -93,6 +93,16 @@ impl Shell {
     }
 
     // ==========================================
+    // MODE 3: ONE COMMAND (`oxide -c`)
+    // ==========================================
+    /// Runs a single command string and returns its exit status. Nothing is
+    /// added to the history file.
+    pub fn run_command(&mut self, command: &str) -> i32 {
+        self.execute_line(command);
+        self.state.last_exit_code
+    }
+
+    // ==========================================
     // THE SHARED EXECUTION ENGINE
     // ==========================================
     pub fn execute_line(&mut self, input: &str) {
