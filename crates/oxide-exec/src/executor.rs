@@ -751,6 +751,8 @@ fn expand_command(cmd: &Command, ctx: &dyn Context) -> Command {
         outfile: cmd.outfile.as_deref().map(|f| expand_string(f, ctx)),
         infile: cmd.infile.as_deref().map(|f| expand_string(f, ctx)),
         append: cmd.append,
+        errfile: cmd.errfile.as_deref().map(|f| expand_string(f, ctx)),
+        err_append: cmd.err_append,
     }
 }
 

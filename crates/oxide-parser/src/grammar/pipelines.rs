@@ -29,44 +29,27 @@ impl Parser {
                     }
                     self.cursor += 1;
                 }
-                Token::RedirectOut => {
+                Token::RedirectOut
+                | Token::RedirectAppend
+                | Token::RedirectIn
+                | Token::RedirectErr
+                | Token::RedirectErrAppend => {
+                    let op = self.tokens[self.cursor].clone();
                     self.cursor += 1;
-                    if self.cursor < self.tokens.len() {
-                        if let Token::Word(file) | Token::StringLiteral(file) =
-                            &self.tokens[self.cursor]
-                        {
-                            if let Some(cmd) = &mut current_cmd {
-                                cmd.outfile = Some(file.clone());
-                                cmd.append = false;
-                            }
-                            self.cursor += 1;
+                    let Some(target) = self.redirect_target() else {
+                        continue;
+                    };
+                    // A redirect may come before the program: `> out.txt echo hi`.
+                    let cmd = current_cmd.get_or_insert_with(|| Command::new(String::new()));
+                    match op {
+                        Token::RedirectOut | Token::RedirectAppend => {
+                            cmd.outfile = Some(target);
+                            cmd.append = op == Token::RedirectAppend;
                         }
-                    }
-                }
-                Token::RedirectAppend => {
-                    self.cursor += 1;
-                    if self.cursor < self.tokens.len() {
-                        if let Token::Word(file) | Token::StringLiteral(file) =
-                            &self.tokens[self.cursor]
-                        {
-                            if let Some(cmd) = &mut current_cmd {
-                                cmd.outfile = Some(file.clone());
-                                cmd.append = true;
-                            }
-                            self.cursor += 1;
-                        }
-                    }
-                }
-                Token::RedirectIn => {
-                    self.cursor += 1;
-                    if self.cursor < self.tokens.len() {
-                        if let Token::Word(file) | Token::StringLiteral(file) =
-                            &self.tokens[self.cursor]
-                        {
-                            if let Some(cmd) = &mut current_cmd {
-                                cmd.infile = Some(file.clone());
-                            }
-                            self.cursor += 1;
+                        Token::RedirectIn => cmd.infile = Some(target),
+                        _ => {
+                            cmd.errfile = Some(target);
+                            cmd.err_append = op == Token::RedirectErrAppend;
                         }
                     }
                 }
@@ -89,6 +72,18 @@ impl Parser {
         } else {
             // It's a chained pipeline (e.g., `ls -la | grep src`)
             Some(Statement::Pipeline(pipeline))
+        }
+    }
+
+    /// Takes the word naming a redirect's file, if one follows.
+    fn redirect_target(&mut self) -> Option<String> {
+        match self.tokens.get(self.cursor) {
+            Some(Token::Word(file) | Token::StringLiteral(file)) => {
+                let file = file.clone();
+                self.cursor += 1;
+                Some(file)
+            }
+            _ => None,
         }
     }
 }

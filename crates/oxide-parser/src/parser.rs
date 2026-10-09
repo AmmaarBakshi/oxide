@@ -120,6 +120,19 @@ mod tests {
     }
 
     #[test]
+    fn stderr_redirects_are_parsed() {
+        let cmd = command("make 2> err.txt > out.txt");
+        assert_eq!(cmd.errfile.as_deref(), Some("err.txt"));
+        assert!(!cmd.err_append);
+        assert_eq!(cmd.outfile.as_deref(), Some("out.txt"));
+
+        let cmd = command("make 2>>log.txt");
+        assert_eq!(cmd.errfile.as_deref(), Some("log.txt"));
+        assert!(cmd.err_append);
+        assert_eq!(cmd.args, Vec::<String>::new());
+    }
+
+    #[test]
     fn words_that_only_look_like_assignments_are_commands() {
         for word in ["=x", "1X=2", "\"X\"=1", "A-B=1"] {
             let cmd = command(word);

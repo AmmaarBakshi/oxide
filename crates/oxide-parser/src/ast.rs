@@ -32,6 +32,10 @@ pub struct Command {
     pub infile: Option<String>,
     /// When true, `outfile` is opened in append mode (`>>`) rather than truncating (`>`).
     pub append: bool,
+    /// Where stderr goes (`2>` / `2>>`).
+    pub errfile: Option<String>,
+    /// When true, `errfile` is appended to (`2>>`).
+    pub err_append: bool,
 }
 
 impl Command {
@@ -43,6 +47,8 @@ impl Command {
             outfile: None,
             infile: None,
             append: false,
+            errfile: None,
+            err_append: false,
         }
     }
 }

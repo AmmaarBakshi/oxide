@@ -75,8 +75,18 @@ impl<'a> Lexer<'a> {
                 // Everything else starts a word: a command, flag or path.
                 _ => {
                     let word = self.word();
-                    // A backslash-newline on its own reads as nothing.
-                    if !word.is_empty() {
+                    if word == "2" && self.input.peek() == Some(&'>') {
+                        // `2>` and `2>>` redirect stderr. Only a bare 2 right
+                        // against the `>` counts: `echo 2 > f` writes "2".
+                        self.input.next();
+                        if self.input.peek() == Some(&'>') {
+                            self.input.next();
+                            tokens.push(Token::RedirectErrAppend);
+                        } else {
+                            tokens.push(Token::RedirectErr);
+                        }
+                    } else if !word.is_empty() {
+                        // (A backslash-newline on its own reads as nothing.)
                         tokens.push(Token::Word(word));
                     }
                 }
@@ -178,6 +188,33 @@ mod tests {
     #[test]
     fn backslash_keeps_a_separator_in_the_word() {
         assert_eq!(words("touch a\\ b"), [word("touch"), word("a\\ b")]);
+    }
+
+    #[test]
+    fn two_right_against_an_arrow_redirects_stderr() {
+        assert_eq!(
+            words("cmd 2>err 2>>log"),
+            [
+                word("cmd"),
+                Token::RedirectErr,
+                word("err"),
+                Token::RedirectErrAppend,
+                word("log")
+            ]
+        );
+        // With a space, or as part of a longer word, it is just text.
+        assert_eq!(
+            words("echo 2 >f x2>g"),
+            [
+                word("echo"),
+                word("2"),
+                Token::RedirectOut,
+                word("f"),
+                word("x2"),
+                Token::RedirectOut,
+                word("g")
+            ]
+        );
     }
 
     #[test]
