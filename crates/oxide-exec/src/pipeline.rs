@@ -64,18 +64,20 @@ pub struct Spawned {
     /// larger than the OS pipe capacity from deadlocking us against a child
     /// that hasn't started reading yet.
     pub feeder: Option<JoinHandle<()>>,
-    /// The read end of this stage's output, for the next stage. `None` for
-    /// the last stage.
+    /// The read end of this stage's output, when it was spawned with
+    /// `pipe_output`.
     pub output: Option<PipeReader>,
 }
 
 /// Spawns one external stage of a pipeline, wiring `upstream` to its stdin.
-/// Redirects come from `cmd`; `program` is its resolved path.
+/// Redirects come from `cmd`; `program` is its resolved path. With
+/// `pipe_output`, stdout goes down a pipe returned in [`Spawned::output`]:
+/// to the next stage, or to be captured by `$(...)`.
 pub fn spawn_stage(
     program: &str,
     args: &[String],
     upstream: Upstream,
-    is_last: bool,
+    pipe_output: bool,
     cmd: &ast::Command,
 ) -> Result<Spawned, String> {
     let mut process = std::process::Command::new(program);
@@ -98,7 +100,7 @@ pub fn spawn_stage(
 
     // Every stage but the last writes into a pipe for the next one. An OS
     // pipe rather than `Stdio::piped()` lets `2>&1` join stderr onto it.
-    let (output, pipe) = if is_last {
+    let (output, pipe) = if !pipe_output {
         (None, None)
     } else {
         let (reader, writer) = std::io::pipe().map_err(|e| format!("oxide: pipeline: {}", e))?;
@@ -132,10 +134,13 @@ pub fn spawn_stage(
 
 /// Opens a builtin's output sink: the final redirect target, the terminal, or
 /// a buffer that becomes the next stage's input.
+///
+/// Inside `$(...)`, what would have gone to the terminal goes to `capture`.
 pub fn builtin_sink(
     is_last: bool,
     outfile: &Option<String>,
     append: bool,
+    capture: Option<&SharedBuf>,
 ) -> Result<BuiltinSink, String> {
     if !is_last {
         return Ok(BuiltinSink::Buffer(Vec::new()));
@@ -144,7 +149,10 @@ pub fn builtin_sink(
         Some(path) => redirect::open_output(path, append)
             .map(BuiltinSink::File)
             .map_err(|e| format!("oxide: redirection error: {}: {}", path, e)),
-        None => Ok(BuiltinSink::Stdout(std::io::stdout())),
+        None => Ok(match capture {
+            Some(buf) => BuiltinSink::Shared(buf.clone()),
+            None => BuiltinSink::Stdout(std::io::stdout()),
+        }),
     }
 }
 
@@ -157,6 +165,11 @@ impl SharedBuf {
     /// Takes everything written so far.
     pub fn take(&self) -> Vec<u8> {
         std::mem::take(&mut *self.0.borrow_mut())
+    }
+
+    /// Appends `bytes`.
+    pub fn push(&self, bytes: &[u8]) {
+        self.0.borrow_mut().extend_from_slice(bytes);
     }
 }
 
@@ -176,6 +189,8 @@ pub enum BuiltinSink {
     Stdout(std::io::Stdout),
     File(std::fs::File),
     Buffer(Vec<u8>),
+    /// The output of a `$(...)` being captured.
+    Shared(SharedBuf),
 }
 
 impl BuiltinSink {
@@ -185,6 +200,7 @@ impl BuiltinSink {
             BuiltinSink::Stdout(s) => s,
             BuiltinSink::File(f) => f,
             BuiltinSink::Buffer(b) => b,
+            BuiltinSink::Shared(s) => s,
         }
     }
 

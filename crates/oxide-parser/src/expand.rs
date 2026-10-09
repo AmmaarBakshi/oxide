@@ -25,16 +25,20 @@ const ESCAPABLE: &str = " \t\\'\"$`*?[]{}|&;<>()#~";
 /// Characters a backslash escapes inside double quotes.
 const ESCAPABLE_IN_DOUBLE: &str = "\\\"$`";
 
-/// The shell state expansion reads from.
+/// The shell state expansion reads from, and runs commands in.
 pub trait Context {
     /// The value of the variable or special parameter `name` (such as `?`),
     /// or `None` when it is unset.
     fn lookup(&self, name: &str) -> Option<String>;
+
+    /// Runs `command` for a `$(...)` substitution and returns what it wrote
+    /// to stdout.
+    fn substitute(&mut self, command: &str) -> String;
 }
 
 /// Expands `word` into the fields it stands for: none (`$UNSET`), one, or
 /// several (`$LIST`, `*.rs`).
-pub fn expand_word(word: &str, ctx: &dyn Context) -> Vec<String> {
+pub fn expand_word(word: &str, ctx: &mut dyn Context) -> Vec<String> {
     let mut fields = Vec::new();
     for field in expand(word, true, ctx) {
         if field.has_glob {
@@ -52,7 +56,7 @@ pub fn expand_word(word: &str, ctx: &dyn Context) -> Vec<String> {
 /// Expands `word` to exactly one string, with no field splitting or
 /// globbing. Used where a single value is wanted: assignment values,
 /// redirection targets and declarations such as `export NAME=value`.
-pub fn expand_string(word: &str, ctx: &dyn Context) -> String {
+pub fn expand_string(word: &str, ctx: &mut dyn Context) -> String {
     expand(word, false, ctx)
         .into_iter()
         .next()
@@ -145,7 +149,7 @@ impl Fields {
     }
 }
 
-fn expand(word: &str, split: bool, ctx: &dyn Context) -> Vec<Field> {
+fn expand(word: &str, split: bool, ctx: &mut dyn Context) -> Vec<Field> {
     let mut out = Fields::new(split);
     let mut chars = word.chars().peekable();
     let mut in_double = false;
@@ -206,12 +210,20 @@ enum Dollar {
 }
 
 /// Reads what follows a `$` (already consumed) and expands it.
-fn dollar(chars: &mut Peekable<Chars<'_>>, ctx: &dyn Context) -> Dollar {
+fn dollar(chars: &mut Peekable<Chars<'_>>, ctx: &mut dyn Context) -> Dollar {
     match chars.peek() {
         // `$?`: the exit status of the last command; `$$`: the shell's pid.
         Some(&c @ ('?' | '$')) => {
             chars.next();
             Dollar::Value(lookup(&c.to_string(), ctx))
+        }
+        // `$(command)`: what the command writes to stdout, without the
+        // trailing newlines.
+        Some('(') => {
+            chars.next();
+            let command = substitution_body(chars);
+            let output = ctx.substitute(&command);
+            Dollar::Value(output.trim_end_matches(['\n', '\r']).to_string())
         }
         Some('{') => {
             chars.next();
@@ -247,6 +259,74 @@ fn dollar(chars: &mut Peekable<Chars<'_>>, ctx: &dyn Context) -> Dollar {
     }
 }
 
+/// Reads the body of a `$(...)` whose `$(` is already consumed, up to the
+/// `)` that closes it (consumed, not returned). Parentheses inside quotes
+/// or nested substitutions don't count.
+fn substitution_body(chars: &mut Peekable<Chars<'_>>) -> String {
+    let mut body = String::new();
+    let mut depth = 1;
+    while let Some(c) = chars.next() {
+        match c {
+            '\'' => {
+                body.push(c);
+                for c in chars.by_ref() {
+                    body.push(c);
+                    if c == '\'' {
+                        break;
+                    }
+                }
+            }
+            '"' => {
+                body.push(c);
+                double_quoted_body(chars, &mut body);
+            }
+            '\\' => {
+                body.push(c);
+                if let Some(next) = chars.next() {
+                    body.push(next);
+                }
+            }
+            '(' => {
+                depth += 1;
+                body.push(c);
+            }
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    break;
+                }
+                body.push(c);
+            }
+            _ => body.push(c),
+        }
+    }
+    body
+}
+
+/// Copies the rest of a double-quoted string (its opening quote already
+/// copied) onto `body`, including any `$(...)` inside it, which may hold
+/// quotes of its own.
+fn double_quoted_body(chars: &mut Peekable<Chars<'_>>, body: &mut String) {
+    while let Some(c) = chars.next() {
+        body.push(c);
+        match c {
+            '"' => break,
+            '\\' => {
+                if let Some(next) = chars.next() {
+                    body.push(next);
+                }
+            }
+            '$' if chars.peek() == Some(&'(') => {
+                chars.next();
+                body.push('(');
+                body.push_str(&substitution_body(chars));
+                body.push(')');
+            }
+            _ => {}
+        }
+    }
+}
+
 /// A variable's value; unset reads as empty.
 fn lookup(name: &str, ctx: &dyn Context) -> String {
     if name == "$" {
@@ -278,14 +358,19 @@ mod tests {
                 _ => env::var(name).ok(),
             }
         }
+
+        /// Echoes the command back in angle brackets, trailing newlines and all.
+        fn substitute(&mut self, command: &str) -> String {
+            format!("<{}>\n\n", command)
+        }
     }
 
     fn words(word: &str) -> Vec<String> {
-        expand_word(word, &Status(0))
+        expand_word(word, &mut Status(0))
     }
 
     fn string(word: &str) -> String {
-        expand_string(word, &Status(0))
+        expand_string(word, &mut Status(0))
     }
 
     #[test]
@@ -320,9 +405,9 @@ mod tests {
 
     #[test]
     fn dollar_question_is_the_last_status() {
-        assert_eq!(expand_word("$?", &Status(3)), ["3"]);
-        assert_eq!(expand_string("[${?}]", &Status(127)), "[127]");
-        assert_eq!(expand_string("'$?'", &Status(3)), "$?");
+        assert_eq!(expand_word("$?", &mut Status(3)), ["3"]);
+        assert_eq!(expand_string("[${?}]", &mut Status(127)), "[127]");
+        assert_eq!(expand_string("'$?'", &mut Status(3)), "$?");
     }
 
     #[test]
@@ -331,6 +416,21 @@ mod tests {
         assert_eq!(words("$$"), std::slice::from_ref(&pid));
         assert_eq!(string("pid-${$}.log"), format!("pid-{}.log", pid));
         assert_eq!(string("'$$'"), "$$");
+    }
+
+    #[test]
+    fn command_substitution_is_replaced_by_its_output() {
+        assert_eq!(string("x$(echo hi)y"), "x<echo hi>y");
+        // Unquoted, the output is split into words; quoted, it is not.
+        assert_eq!(words("$(a b)"), ["<a", "b>"]);
+        assert_eq!(words("\"$(a  b)\""), ["<a  b>"]);
+    }
+
+    #[test]
+    fn command_substitution_body_balances_parentheses_and_quotes() {
+        assert_eq!(string("$(a (b) c)"), "<a (b) c>");
+        assert_eq!(string("$(echo ')' \")\")"), "<echo ')' \")\">");
+        assert_eq!(string("\"$(echo \"x y\")\""), "<echo \"x y\">");
     }
 
     #[test]

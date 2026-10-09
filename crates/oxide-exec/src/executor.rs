@@ -13,7 +13,7 @@
 
 use std::collections::HashMap;
 use std::ffi::OsString;
-use std::io::Write;
+use std::io::{Read, Write};
 
 use oxide_builtins::{Ctx, Io};
 use oxide_compat::CompatMode;
@@ -35,6 +35,9 @@ pub struct Executor {
     /// Shell variables (`NAME=value`). Exported ones live in the process
     /// environment instead, where child processes can see them.
     pub vars: HashMap<String, String>,
+    /// The status of the last `$(...)` that ran, for an assignment that
+    /// holds one: `X=$(cmd)` has the status of `cmd`.
+    substitution_status: Option<i32>,
 }
 
 /// The shell state a command runs against.
@@ -51,6 +54,8 @@ pub struct ExecEnv<'a> {
     pub history: &'a [String],
     pub security: &'a PermissionManager,
     pub command_cache: &'a mut CommandCache,
+    /// While a `$(...)` runs, where its output goes instead of the terminal.
+    pub capture: Option<SharedBuf>,
 }
 
 /// Builtins that can't live in `oxide-builtins` because they need the executor
@@ -87,22 +92,28 @@ impl ExecutorBuiltin {
     }
 }
 
-/// What `$` expansions read: the shell's own state, then the environment.
-struct ShellContext<'s> {
-    last_status: i32,
-    vars: &'s HashMap<String, String>,
+/// What expansion reads — the shell's own state, then the environment —
+/// and the executor it runs `$(...)` substitutions in.
+struct ShellContext<'a, 'e> {
+    executor: &'a mut Executor,
+    env: &'a mut ExecEnv<'e>,
 }
 
-impl Context for ShellContext<'_> {
+impl Context for ShellContext<'_, '_> {
     fn lookup(&self, name: &str) -> Option<String> {
         match name {
-            "?" => Some(self.last_status.to_string()),
+            "?" => Some((*self.env.last_exit_code).to_string()),
             _ => self
+                .executor
                 .vars
                 .get(name)
                 .cloned()
                 .or_else(|| std::env::var(name).ok()),
         }
+    }
+
+    fn substitute(&mut self, command: &str) -> String {
+        self.executor.capture_output(command, self.env)
     }
 }
 
@@ -119,15 +130,40 @@ impl Executor {
             script_scope: oxide_script::scope::Scope::new(),
             exit_status: None,
             vars: HashMap::new(),
+            substitution_status: None,
         }
     }
 
     /// The expansion context for the current state.
-    fn context<'s>(&'s self, env: &ExecEnv<'_>) -> ShellContext<'s> {
+    fn context<'a, 'e>(&'a mut self, env: &'a mut ExecEnv<'e>) -> ShellContext<'a, 'e> {
         ShellContext {
-            last_status: *env.last_exit_code,
-            vars: &self.vars,
+            executor: self,
+            env,
         }
+    }
+
+    /// Runs `command` as a `$(...)` substitution and returns what it wrote
+    /// to stdout.
+    ///
+    /// Like a subshell, it can't change the shell around it: variables, the
+    /// working directory and an `exit` inside it stay inside it.
+    fn capture_output(&mut self, command: &str, env: &mut ExecEnv<'_>) -> String {
+        let buf = SharedBuf::default();
+        let outer_capture = env.capture.replace(buf.clone());
+        let vars = self.vars.clone();
+        let cwd = std::env::current_dir().ok();
+        let exit_status = self.exit_status.take();
+
+        self.run_input(command, env);
+
+        self.substitution_status = Some(*env.last_exit_code);
+        self.exit_status = exit_status;
+        if let Some(cwd) = cwd {
+            let _ = std::env::set_current_dir(cwd);
+        }
+        self.vars = vars;
+        env.capture = outer_capture;
+        String::from_utf8_lossy(&buf.take()).into_owned()
     }
 
     /// Sets a variable: in the environment if it is exported there,
@@ -162,6 +198,7 @@ impl Executor {
             history,
             security: &security,
             command_cache,
+            capture: None,
         };
         self.run_input(input, &mut env);
     }
@@ -287,7 +324,8 @@ impl Executor {
                 *env.last_exit_code = 0;
                 for val in values {
                     // Expand variables (e.g. $VAR) and globs (e.g. *.txt)
-                    for final_val in expand_word(val, &self.context(env)) {
+                    let fields = expand_word(val, &mut self.context(env));
+                    for final_val in fields {
                         if self.exit_status.is_some() {
                             return;
                         }
@@ -299,8 +337,8 @@ impl Executor {
         }
     }
 
-    fn evaluate_if_condition(&self, condition: &str, env: &ExecEnv<'_>) -> bool {
-        let val = expand_string(condition, &self.context(env));
+    fn evaluate_if_condition(&mut self, condition: &str, env: &mut ExecEnv<'_>) -> bool {
+        let val = expand_string(condition, &mut self.context(env));
         !val.is_empty() && val != "0" && val != "false"
     }
 
@@ -312,17 +350,19 @@ impl Executor {
     /// statement come through here, so there is a single definition of what
     /// each command name means.
     fn run_command(&mut self, cmd: &Command, env: &mut ExecEnv<'_>) {
-        let cmd = &expand_command(cmd, &self.context(env));
+        let cmd = &expand_command(cmd, &mut self.context(env));
         if cmd.program.is_empty() {
             // A line of bare assignments sets shell variables. Each value
             // can use the ones before it: `A=1 B=$A`.
+            self.substitution_status = None;
             for assignment in &cmd.assignments {
-                let value = expand_string(&assignment.value, &self.context(env));
+                let value = expand_string(&assignment.value, &mut self.context(env));
                 self.set_var(&assignment.name, value);
             }
-            // (With no assignments, the whole command expanded to nothing,
-            // as with an unset `$CMD`.)
-            *env.last_exit_code = 0;
+            // It succeeds, unless a `$(...)` in it ran: then it has that
+            // command's status. (With no assignments at all, the whole
+            // command expanded to nothing, as with an unset `$CMD`.)
+            *env.last_exit_code = self.substitution_status.take().unwrap_or(0);
             return;
         }
 
@@ -333,10 +373,10 @@ impl Executor {
     }
 
     /// Sets the environment for `FOO=1 cmd`; see [`PrefixEnv`].
-    fn prefix_env(&self, assignments: &[Assignment], env: &ExecEnv<'_>) -> PrefixEnv {
+    fn prefix_env(&mut self, assignments: &[Assignment], env: &mut ExecEnv<'_>) -> PrefixEnv {
         let mut saved = Vec::with_capacity(assignments.len());
         for assignment in assignments {
-            let value = expand_string(&assignment.value, &self.context(env));
+            let value = expand_string(&assignment.value, &mut self.context(env));
             saved.push((assignment.name.clone(), std::env::var_os(&assignment.name)));
             std::env::set_var(&assignment.name, value);
         }
@@ -407,7 +447,8 @@ impl Executor {
                 }
             }
         } else {
-            *env.last_exit_code = crate::process::spawn_single(&program_path, &args, cmd);
+            *env.last_exit_code =
+                crate::process::spawn_single(&program_path, &args, cmd, env.capture.as_ref());
         }
     }
 
@@ -592,7 +633,7 @@ impl Executor {
 
         for (i, cmd) in commands.iter().enumerate() {
             let is_last = i == len - 1;
-            let cmd = &expand_command(cmd, &self.context(env));
+            let cmd = &expand_command(cmd, &mut self.context(env));
             if cmd.program.is_empty() {
                 // A stage that expanded to nothing produces no output.
                 upstream = Upstream::None;
@@ -635,7 +676,9 @@ impl Executor {
             }
 
             let program_path = resolve_program_path(&cmd.program, env.command_cache);
-            match spawn_stage(&program_path, &cmd.args, upstream.take(), is_last, cmd) {
+            // The last stage pipes its output only to be captured by `$(...)`.
+            let pipe_output = !is_last || env.capture.is_some();
+            match spawn_stage(&program_path, &cmd.args, upstream.take(), pipe_output, cmd) {
                 Ok(mut stage) => {
                     if is_last {
                         status_from_child = true;
@@ -659,6 +702,15 @@ impl Executor {
         // Release any dangling read end before reaping, so a producer blocked
         // on a full pipe gets a broken-pipe error instead of hanging us.
         drop(upstream);
+
+        // Inside `$(...)`, an external last stage's output is the result.
+        if let (Some(capture), Some(stage)) = (&env.capture, spawned.last_mut()) {
+            if let Some(mut output) = stage.output.take() {
+                let mut bytes = Vec::new();
+                let _ = output.read_to_end(&mut bytes);
+                capture.push(&bytes);
+            }
+        }
 
         let last = spawned.len().saturating_sub(1);
         for (idx, mut stage) in spawned.into_iter().enumerate() {
@@ -710,27 +762,33 @@ impl Drop for PrefixEnv {
 /// `alias` and `export` take `NAME=VALUE` pairs, `unset` takes names, and
 /// `source` takes one path. Their arguments are expanded as single strings,
 /// so `export GREETING="hello world"` or a value holding `*` arrives whole.
-fn expand_command(cmd: &Command, ctx: &dyn Context) -> Command {
+fn expand_command(cmd: &Command, ctx: &mut dyn Context) -> Command {
     let mut words = expand_word(&cmd.program, ctx).into_iter();
     let program = words.next().unwrap_or_default();
     let mut args: Vec<String> = words.collect();
 
-    if matches!(program.as_str(), "source" | "alias" | "unset" | "export") {
-        args.extend(cmd.args.iter().map(|arg| expand_string(arg, ctx)));
-    } else {
-        for arg in &cmd.args {
+    let declaration = matches!(program.as_str(), "source" | "alias" | "unset" | "export");
+    for arg in &cmd.args {
+        if declaration {
+            args.push(expand_string(arg, ctx));
+        } else {
             args.extend(expand_word(arg, ctx));
         }
     }
+
+    let mut target = |file: &Option<String>| file.as_deref().map(|f| expand_string(f, ctx));
+    let outfile = target(&cmd.outfile);
+    let infile = target(&cmd.infile);
+    let errfile = target(&cmd.errfile);
 
     Command {
         program,
         args,
         assignments: cmd.assignments.clone(),
-        outfile: cmd.outfile.as_deref().map(|f| expand_string(f, ctx)),
-        infile: cmd.infile.as_deref().map(|f| expand_string(f, ctx)),
+        outfile,
+        infile,
         append: cmd.append,
-        errfile: cmd.errfile.as_deref().map(|f| expand_string(f, ctx)),
+        errfile,
         err_append: cmd.err_append,
         err_to_out: cmd.err_to_out,
         out_to_err: cmd.out_to_err,
@@ -757,7 +815,7 @@ fn run_builtin_stage(
         }
     };
 
-    let mut sink = match builtin_sink(is_last, &cmd.outfile, cmd.append) {
+    let mut sink = match builtin_sink(is_last, &cmd.outfile, cmd.append, env.capture.as_ref()) {
         Ok(sink) => sink,
         Err(e) => {
             eprintln!("{}", e);
@@ -843,11 +901,16 @@ fn resolve_program_path(program: &str, command_cache: &mut CommandCache) -> Stri
 mod tests {
     use super::*;
 
-    fn ctx() -> ShellContext<'static> {
-        static NO_VARS: std::sync::OnceLock<HashMap<String, String>> = std::sync::OnceLock::new();
-        ShellContext {
-            last_status: 0,
-            vars: NO_VARS.get_or_init(HashMap::new),
+    /// Expansion with no shell around it: just the environment.
+    struct NoShell;
+
+    impl Context for NoShell {
+        fn lookup(&self, name: &str) -> Option<String> {
+            std::env::var(name).ok()
+        }
+
+        fn substitute(&mut self, _command: &str) -> String {
+            String::new()
         }
     }
 
@@ -880,7 +943,7 @@ mod tests {
         let mut cmd = Command::new("export".to_string());
         cmd.args = vec!["GREETING=\"hello *\"".to_string(), "STAR=*".to_string()];
         assert_eq!(
-            expand_command(&cmd, &ctx()).args,
+            expand_command(&cmd, &mut NoShell).args,
             ["GREETING=hello *", "STAR=*"]
         );
     }
@@ -890,7 +953,7 @@ mod tests {
         let mut cmd = Command::new("'echo'".to_string());
         cmd.args = vec!["\"a  b\"".to_string()];
         cmd.outfile = Some("'out file.txt'".to_string());
-        let cmd = expand_command(&cmd, &ctx());
+        let cmd = expand_command(&cmd, &mut NoShell);
         assert_eq!(cmd.program, "echo");
         assert_eq!(cmd.args, ["a  b"]);
         assert_eq!(cmd.outfile.as_deref(), Some("out file.txt"));
