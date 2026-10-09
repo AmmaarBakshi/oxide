@@ -3,7 +3,7 @@ use std::env;
 use crate::export::is_valid_name;
 use crate::{Ctx, Io};
 
-pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
+pub fn run(args: &[String], io: &mut Io<'_>, ctx: &mut Ctx<'_>) -> i32 {
     if args.is_empty() {
         ewln!(io, "oxide: unset: missing variable name");
         return 1;
@@ -13,6 +13,7 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
     for var in args {
         // `remove_var` panics on an empty name or one containing '=' or NUL.
         if is_valid_name(var) {
+            ctx.vars.remove(var);
             env::remove_var(var);
         } else {
             ewln!(io, "oxide: unset: '{}': not a valid identifier", var);

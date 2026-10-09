@@ -2,7 +2,7 @@ use std::env;
 
 use crate::{Ctx, Io};
 
-pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
+pub fn run(args: &[String], io: &mut Io<'_>, ctx: &mut Ctx<'_>) -> i32 {
     if args.is_empty() {
         ewln!(io, "oxide: export: missing argument");
         return 1;
@@ -10,10 +10,15 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
 
     let mut status = 0;
     for arg in args {
-        // Split the argument by the '=' sign (e.g., "NAME=Atlas")
+        // Split the argument by the '=' sign (e.g., "NAME=Atlas"). A bare
+        // NAME exports the shell variable of that name, if there is one.
         let Some((key, value)) = arg.split_once('=') else {
-            ewln!(io, "oxide: export: invalid format '{}'. Use KEY=VALUE", arg);
-            status = 1;
+            if !is_valid_name(arg) {
+                ewln!(io, "oxide: export: '{}': not a valid identifier", arg);
+                status = 1;
+            } else if let Some(value) = ctx.vars.remove(arg.as_str()) {
+                env::set_var(arg, value);
+            }
             continue;
         };
         // `set_var` panics on an empty name or a NUL byte, so check first.
@@ -24,6 +29,7 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
             ewln!(io, "oxide: export: '{}': value contains a NUL byte", key);
             status = 1;
         } else {
+            ctx.vars.remove(key);
             env::set_var(key, value);
         }
     }

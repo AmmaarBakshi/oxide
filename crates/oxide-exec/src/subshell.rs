@@ -8,6 +8,7 @@ pub fn execute(
     aliases: &mut HashMap<String, String>,
     job_manager: &mut crate::jobs::JobManager,
     history: &[String],
+    vars: &HashMap<String, String>,
 ) -> i32 {
     // 1. Snapshot the current directory before we do anything
     let original_dir = env::current_dir().expect("oxide: failed to get current directory");
@@ -18,6 +19,8 @@ pub fn execute(
 
     // 3. Boot up a completely fresh execution engine for the sandbox
     let mut sandbox_executor = crate::executor::Executor::new();
+    // It starts with a copy of the shell's variables; changes stay inside.
+    sandbox_executor.vars = vars.clone();
     // Subshells are short-lived, so give them a throwaway path cache.
     let mut subshell_cache = oxide_perf::cache::CommandCache::new();
 

@@ -1,5 +1,6 @@
 use oxide_builtins::history as history_builtin;
 use oxide_compat::CompatMode;
+use oxide_exec::executor::Executor;
 use oxide_exec::jobs::JobManager;
 use oxide_perf::cache::CommandCache;
 use std::collections::HashMap; // <-- 1. Import it
@@ -14,6 +15,9 @@ pub struct ShellState {
     pub job_manager: JobManager,
     pub history: Vec<String>,
     pub command_cache: CommandCache, // <-- 2. Add it here
+    /// Lives as long as the session, so variables set on one line are
+    /// still there on the next.
+    pub executor: Executor,
 }
 
 impl Default for ShellState {
@@ -33,6 +37,7 @@ impl ShellState {
             job_manager: JobManager::new(),
             history: history_builtin::load(),
             command_cache: CommandCache::new(), // <-- 3. Initialize it
+            executor: Executor::new(),
         }
     }
 }

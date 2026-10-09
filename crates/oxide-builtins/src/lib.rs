@@ -67,6 +67,10 @@ pub struct Ctx<'a> {
     pub aliases: &'a mut HashMap<String, String>,
     /// Commands run so far this session, for `history`.
     pub history: &'a [String],
+    /// Shell variables: set with `NAME=value` but not exported, so child
+    /// processes don't see them. Exported variables live in the process
+    /// environment instead.
+    pub vars: &'a mut HashMap<String, String>,
 }
 
 /// Builtins that `oxide-exec` dispatches itself because they need executor

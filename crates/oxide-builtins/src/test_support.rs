@@ -45,9 +45,11 @@ fn run_in(
         .map(|(name, value)| (name.to_string(), value.to_string()))
         .collect();
     let history: Vec<String> = history.iter().map(|cmd| cmd.to_string()).collect();
+    let mut vars = HashMap::new();
     let mut ctx = Ctx {
         aliases: &mut aliases,
         history: &history,
+        vars: &mut vars,
     };
 
     let status = {

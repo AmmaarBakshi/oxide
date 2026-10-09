@@ -31,6 +31,9 @@ pub struct Executor {
     /// Set by `exit`: the status the shell should exit with. Once it is set
     /// nothing else runs, however deeply nested the `exit` was.
     pub exit_status: Option<i32>,
+    /// Shell variables (`NAME=value`). Exported ones live in the process
+    /// environment instead, where child processes can see them.
+    pub vars: HashMap<String, String>,
 }
 
 /// The shell state a command runs against.
@@ -84,23 +87,20 @@ impl ExecutorBuiltin {
 }
 
 /// What `$` expansions read: the shell's own state, then the environment.
-struct ShellContext {
+struct ShellContext<'s> {
     last_status: i32,
+    vars: &'s HashMap<String, String>,
 }
 
-impl ShellContext {
-    fn new(env: &ExecEnv<'_>) -> Self {
-        Self {
-            last_status: *env.last_exit_code,
-        }
-    }
-}
-
-impl Context for ShellContext {
+impl Context for ShellContext<'_> {
     fn lookup(&self, name: &str) -> Option<String> {
         match name {
             "?" => Some(self.last_status.to_string()),
-            _ => std::env::var(name).ok(),
+            _ => self
+                .vars
+                .get(name)
+                .cloned()
+                .or_else(|| std::env::var(name).ok()),
         }
     }
 }
@@ -117,6 +117,25 @@ impl Executor {
             runtime: oxide_script::runtime::Runtime::new(),
             script_scope: oxide_script::scope::Scope::new(),
             exit_status: None,
+            vars: HashMap::new(),
+        }
+    }
+
+    /// The expansion context for the current state.
+    fn context<'s>(&'s self, env: &ExecEnv<'_>) -> ShellContext<'s> {
+        ShellContext {
+            last_status: *env.last_exit_code,
+            vars: &self.vars,
+        }
+    }
+
+    /// Sets a variable: in the environment if it is exported there,
+    /// otherwise as a shell variable.
+    fn set_var(&mut self, name: &str, value: String) {
+        if std::env::var_os(name).is_some() {
+            std::env::set_var(name, value);
+        } else {
+            self.vars.insert(name.to_string(), value);
         }
     }
 
@@ -173,6 +192,7 @@ impl Executor {
                 env.aliases,
                 env.job_manager,
                 env.history,
+                &self.vars,
             );
             return;
         }
@@ -266,11 +286,11 @@ impl Executor {
                 *env.last_exit_code = 0;
                 for val in values {
                     // Expand variables (e.g. $VAR) and globs (e.g. *.txt)
-                    for final_val in expand_word(val, &ShellContext::new(env)) {
+                    for final_val in expand_word(val, &self.context(env)) {
                         if self.exit_status.is_some() {
                             return;
                         }
-                        std::env::set_var(variable, &final_val);
+                        self.set_var(variable, final_val);
                         self.execute_statements(body, env);
                     }
                 }
@@ -279,7 +299,7 @@ impl Executor {
     }
 
     fn evaluate_if_condition(&self, condition: &str, env: &ExecEnv<'_>) -> bool {
-        let val = expand_string(condition, &ShellContext::new(env));
+        let val = expand_string(condition, &self.context(env));
         !val.is_empty() && val != "0" && val != "false"
     }
 
@@ -291,9 +311,16 @@ impl Executor {
     /// statement come through here, so there is a single definition of what
     /// each command name means.
     fn run_command(&mut self, cmd: &Command, env: &mut ExecEnv<'_>) {
-        let cmd = &expand_command(cmd, &ShellContext::new(env));
+        let cmd = &expand_command(cmd, &self.context(env));
         if cmd.program.is_empty() {
-            // The whole command expanded to nothing, as with an unset `$CMD`.
+            // A line of bare assignments sets shell variables. Each value
+            // can use the ones before it: `A=1 B=$A`.
+            for assignment in &cmd.assignments {
+                let value = expand_string(&assignment.value, &self.context(env));
+                self.set_var(&assignment.name, value);
+            }
+            // (With no assignments, the whole command expanded to nothing,
+            // as with an unset `$CMD`.)
             *env.last_exit_code = 0;
             return;
         }
@@ -308,7 +335,15 @@ impl Executor {
         }
 
         if let Some(builtin) = oxide_builtins::registry().get(&cmd.program) {
-            let (code, _) = run_builtin_stage(builtin, &cmd.args, Upstream::None, cmd, true, env);
+            let (code, _) = run_builtin_stage(
+                builtin,
+                &cmd.args,
+                Upstream::None,
+                cmd,
+                true,
+                &mut self.vars,
+                env,
+            );
             *env.last_exit_code = code;
             return;
         }
@@ -548,7 +583,7 @@ impl Executor {
 
         for (i, cmd) in commands.iter().enumerate() {
             let is_last = i == len - 1;
-            let cmd = &expand_command(cmd, &ShellContext::new(env));
+            let cmd = &expand_command(cmd, &self.context(env));
             if cmd.program.is_empty() {
                 // A stage that expanded to nothing produces no output.
                 upstream = Upstream::None;
@@ -570,8 +605,15 @@ impl Executor {
             }
 
             if let Some(builtin) = oxide_builtins::registry().get(&cmd.program) {
-                let (code, next) =
-                    run_builtin_stage(builtin, &cmd.args, upstream.take(), cmd, is_last, env);
+                let (code, next) = run_builtin_stage(
+                    builtin,
+                    &cmd.args,
+                    upstream.take(),
+                    cmd,
+                    is_last,
+                    &mut self.vars,
+                    env,
+                );
                 upstream = next;
                 if is_last {
                     *env.last_exit_code = code;
@@ -678,6 +720,7 @@ fn run_builtin_stage(
     upstream: Upstream,
     cmd: &Command,
     is_last: bool,
+    vars: &mut HashMap<String, String>,
     env: &mut ExecEnv<'_>,
 ) -> (i32, Upstream) {
     let mut reader = match upstream.into_reader(&cmd.infile) {
@@ -700,6 +743,7 @@ fn run_builtin_stage(
     let mut ctx = Ctx {
         aliases: &mut *env.aliases,
         history: env.history,
+        vars,
     };
 
     let code = {
@@ -747,8 +791,12 @@ fn resolve_program_path(program: &str, command_cache: &mut CommandCache) -> Stri
 mod tests {
     use super::*;
 
-    fn ctx() -> ShellContext {
-        ShellContext { last_status: 0 }
+    fn ctx() -> ShellContext<'static> {
+        static NO_VARS: std::sync::OnceLock<HashMap<String, String>> = std::sync::OnceLock::new();
+        ShellContext {
+            last_status: 0,
+            vars: NO_VARS.get_or_init(HashMap::new),
+        }
     }
 
     /// `oxide-ui` completes and highlights every name in `EXECUTOR_BUILTINS`,

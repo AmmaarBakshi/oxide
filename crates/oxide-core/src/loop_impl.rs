@@ -119,19 +119,18 @@ impl Shell {
         // Clean up any background jobs that finished while we were typing
         self.state.job_manager.check_completed();
 
-        let mut executor = oxide_exec::executor::Executor::new();
-
-        executor.execute_line(
+        let state = &mut self.state;
+        state.executor.execute_line(
             input,
-            &mut self.state.mode,
-            &mut self.state.aliases,
-            &mut self.state.last_exit_code,
-            &mut self.state.job_manager,
-            &self.state.history,
-            &mut self.state.command_cache,
+            &mut state.mode,
+            &mut state.aliases,
+            &mut state.last_exit_code,
+            &mut state.job_manager,
+            &state.history,
+            &mut state.command_cache,
         );
 
-        if let Some(status) = executor.exit_status {
+        if let Some(status) = state.executor.exit_status {
             self.state.exit_status = Some(status);
             self.state.is_running = false;
         }
