@@ -15,17 +15,22 @@ pub struct Output {
 
 /// Runs the registered builtin `name` with `args`, feeding it `stdin`.
 pub fn run(name: &str, args: &[&str], stdin: &str) -> Output {
-    run_in(name, args, stdin, &[], &[])
+    run_in(name, args, stdin, &[], &[]).0
 }
 
 /// Like [`run`] with no stdin, but with `aliases` defined in the shell.
 pub fn run_with_aliases(name: &str, args: &[&str], aliases: &[(&str, &str)]) -> Output {
-    run_in(name, args, "", aliases, &[])
+    run_in(name, args, "", aliases, &[]).0
 }
 
 /// Like [`run`] with no stdin, but with `history` as the session so far.
 pub fn run_with_history(name: &str, args: &[&str], history: &[&str]) -> Output {
-    run_in(name, args, "", &[], history)
+    run_in(name, args, "", &[], history).0
+}
+
+/// Like [`run`], also returning the shell variables the builtin set.
+pub fn run_with_vars(name: &str, args: &[&str], stdin: &str) -> (Output, HashMap<String, String>) {
+    run_in(name, args, stdin, &[], &[])
 }
 
 fn run_in(
@@ -34,7 +39,7 @@ fn run_in(
     stdin: &str,
     aliases: &[(&str, &str)],
     history: &[&str],
-) -> Output {
+) -> (Output, HashMap<String, String>) {
     let builtin = registry().get(name).expect("builtin is registered");
     let args: Vec<String> = args.iter().map(|a| a.to_string()).collect();
 
@@ -57,11 +62,12 @@ fn run_in(
         builtin.run(&args, &mut io, &mut ctx)
     };
 
-    Output {
+    let output = Output {
         status,
         stdout: String::from_utf8(stdout).expect("stdout is UTF-8"),
         stderr: String::from_utf8(stderr).expect("stderr is UTF-8"),
-    }
+    };
+    (output, vars)
 }
 
 /// A fresh, empty directory for `test` under the system temp dir. Unique per

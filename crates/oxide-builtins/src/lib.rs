@@ -40,6 +40,7 @@ pub mod mv;
 pub mod open;
 pub mod ps;
 pub mod pwd;
+pub mod read;
 pub mod rm;
 pub mod sleep;
 pub mod sort;
