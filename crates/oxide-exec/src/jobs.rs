@@ -11,6 +11,12 @@ pub struct JobManager {
     next_id: usize,
 }
 
+impl Default for JobManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl JobManager {
     pub fn new() -> Self {
         Self {

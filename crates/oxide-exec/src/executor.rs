@@ -77,6 +77,12 @@ impl ExecutorBuiltin {
     }
 }
 
+impl Default for Executor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Executor {
     pub fn new() -> Self {
         Self {
@@ -85,6 +91,9 @@ impl Executor {
         }
     }
 
+    // The parameters are bundled into an `ExecEnv` straight away; callers
+    // hold them as separate fields of their own state.
+    #[allow(clippy::too_many_arguments)]
     pub fn execute_line(
         &mut self,
         input: &str,
@@ -225,8 +234,8 @@ impl Executor {
     }
 
     fn evaluate_if_condition(&self, condition: &str) -> bool {
-        let val = if condition.starts_with('$') {
-            std::env::var(&condition[1..]).unwrap_or_else(|_| "0".to_string())
+        let val = if let Some(name) = condition.strip_prefix('$') {
+            std::env::var(name).unwrap_or_else(|_| "0".to_string())
         } else {
             condition.to_string()
         };

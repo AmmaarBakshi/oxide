@@ -6,6 +6,12 @@ pub struct StdLib {
     native_functions: HashMap<String, NativeCallback>,
 }
 
+impl Default for StdLib {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StdLib {
     pub fn new() -> Self {
         let mut lib = Self {

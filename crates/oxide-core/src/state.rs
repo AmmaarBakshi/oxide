@@ -3,6 +3,12 @@ pub struct ShellState {
     pub last_exit_code: i32,
 }
 
+impl Default for ShellState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ShellState {
     pub fn new() -> Self {
         Self {

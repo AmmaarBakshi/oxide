@@ -5,6 +5,12 @@ pub struct ModuleManager {
     search_paths: Vec<PathBuf>,
 }
 
+impl Default for ModuleManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ModuleManager {
     pub fn new() -> Self {
         Self {

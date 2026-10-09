@@ -11,6 +11,12 @@ pub struct Runtime {
     pub modules: ModuleManager,
 }
 
+impl Default for Runtime {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Runtime {
     // 1. Added missing constructor (required by Executor)
     pub fn new() -> Self {
@@ -60,10 +66,8 @@ impl Runtime {
     }
 
     fn eval_condition(&mut self, condition: &str) -> bool {
-        let val = if condition.starts_with('$') {
-            self.scope
-                .get(&condition[1..])
-                .unwrap_or_else(|| "0".to_string())
+        let val = if let Some(name) = condition.strip_prefix('$') {
+            self.scope.get(name).unwrap_or_else(|| "0".to_string())
         } else {
             condition.to_string()
         };

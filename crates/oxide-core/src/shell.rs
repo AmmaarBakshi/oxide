@@ -14,6 +14,12 @@ pub struct ShellState {
     pub command_cache: CommandCache, // <-- 2. Add it here
 }
 
+impl Default for ShellState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ShellState {
     pub fn new() -> Self {
         Self {
@@ -30,6 +36,12 @@ impl ShellState {
 
 pub struct Shell {
     pub state: ShellState,
+}
+
+impl Default for Shell {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Shell {

@@ -2,6 +2,12 @@ pub struct SecretStore {
     keys: Vec<String>,
 }
 
+impl Default for SecretStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SecretStore {
     pub fn new() -> Self {
         Self {

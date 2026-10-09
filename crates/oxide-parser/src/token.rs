@@ -42,7 +42,7 @@ impl fmt::Display for Token {
             Token::RedirectAppend => write!(f, ">>"),
             Token::RedirectIn => write!(f, "<"), // Add this
             Token::Background => write!(f, "&"), // Add this
-            Token::Newline => write!(f, "\n"),
+            Token::Newline => writeln!(f),
             Token::Semicolon => write!(f, ";"),
         }
     }

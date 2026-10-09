@@ -5,6 +5,12 @@ pub struct PermissionManager {
     protected_paths: Vec<String>,
 }
 
+impl Default for PermissionManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PermissionManager {
     pub fn new() -> Self {
         let mut blocked = HashSet::new();

@@ -11,6 +11,12 @@ pub struct FunctionRegistry {
     functions: HashMap<String, Function>,
 }
 
+impl Default for FunctionRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FunctionRegistry {
     pub fn new() -> Self {
         Self {
