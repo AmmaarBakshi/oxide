@@ -886,4 +886,96 @@ mod tests {
         assert_eq!(cmd.args, ["a  b"]);
         assert_eq!(cmd.outfile.as_deref(), Some("out file.txt"));
     }
+
+    // ------------------------------------------
+    // Assignments and special variables
+    // ------------------------------------------
+
+    /// Runs each line through one executor, as the REPL would, and returns
+    /// the executor along with the final exit status.
+    fn run(lines: &[&str]) -> (Executor, i32) {
+        let mut executor = Executor::new();
+        let mut mode = CompatMode::Oxide;
+        let mut aliases = HashMap::new();
+        let mut status = 0;
+        let mut jobs = crate::jobs::JobManager::new();
+        let mut cache = CommandCache::new();
+        for line in lines {
+            executor.execute_line(
+                line,
+                &mut mode,
+                &mut aliases,
+                &mut status,
+                &mut jobs,
+                &[],
+                &mut cache,
+            );
+        }
+        (executor, status)
+    }
+
+    fn var<'e>(executor: &'e Executor, name: &str) -> Option<&'e str> {
+        executor.vars.get(name).map(String::as_str)
+    }
+
+    #[test]
+    fn an_assignment_sets_a_shell_variable_not_an_environment_one() {
+        let (executor, status) = run(&["OXIDE_EXEC_SHELL_ONLY=1"]);
+        assert_eq!(status, 0);
+        assert_eq!(var(&executor, "OXIDE_EXEC_SHELL_ONLY"), Some("1"));
+        assert!(std::env::var_os("OXIDE_EXEC_SHELL_ONLY").is_none());
+    }
+
+    #[test]
+    fn values_are_expanded_but_not_split() {
+        let (executor, _) = run(&[
+            "A=1 B=$A-2",
+            "SPACED=\"a  b\"",
+            "LITERAL='$HOME'",
+            "JOINED=$SPACED$A",
+        ]);
+        assert_eq!(var(&executor, "B"), Some("1-2"));
+        assert_eq!(var(&executor, "SPACED"), Some("a  b"));
+        assert_eq!(var(&executor, "LITERAL"), Some("$HOME"));
+        assert_eq!(var(&executor, "JOINED"), Some("a  b1"));
+    }
+
+    #[test]
+    fn assigning_an_exported_variable_updates_the_environment() {
+        let (executor, _) = run(&["export OXIDE_EXEC_EXPORTED=1", "OXIDE_EXEC_EXPORTED=2"]);
+        assert_eq!(std::env::var("OXIDE_EXEC_EXPORTED").unwrap(), "2");
+        assert_eq!(var(&executor, "OXIDE_EXEC_EXPORTED"), None);
+    }
+
+    #[test]
+    fn dollar_question_captures_the_previous_status() {
+        let (executor, status) = run(&["cd ./no/such/dir", "FAILED=$?", "PASSED=$?"]);
+        assert_eq!(var(&executor, "FAILED"), Some("1"));
+        assert_eq!(var(&executor, "PASSED"), Some("0"));
+        // An assignment itself succeeds.
+        assert_eq!(status, 0);
+    }
+
+    #[test]
+    fn dollar_dollar_is_this_process() {
+        let (executor, _) = run(&["PID=$$ BRACED=${$}"]);
+        let pid = std::process::id().to_string();
+        assert_eq!(var(&executor, "PID"), Some(pid.as_str()));
+        assert_eq!(var(&executor, "BRACED"), Some(pid.as_str()));
+    }
+
+    #[test]
+    fn a_prefix_assignment_does_not_outlive_its_command() {
+        let (executor, status) = run(&["OXIDE_EXEC_PREFIX=1 cd ."]);
+        assert_eq!(status, 0);
+        assert!(std::env::var_os("OXIDE_EXEC_PREFIX").is_none());
+        assert_eq!(var(&executor, "OXIDE_EXEC_PREFIX"), None);
+    }
+
+    #[test]
+    fn a_for_loop_variable_is_a_shell_variable() {
+        let (executor, _) = run(&["for OXIDE_EXEC_LOOP in a b c { LAST=$OXIDE_EXEC_LOOP }"]);
+        assert_eq!(var(&executor, "LAST"), Some("c"));
+        assert!(std::env::var_os("OXIDE_EXEC_LOOP").is_none());
+    }
 }
