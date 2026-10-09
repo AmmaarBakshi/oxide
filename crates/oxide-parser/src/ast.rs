@@ -79,26 +79,39 @@ pub enum Condition {
     Or,
 }
 
+/// One statement in a list, and how it hangs off the one before: always
+/// run, or only after a success (`&&`) or a failure (`||`).
+#[derive(Clone, Debug)]
 pub struct Executable {
     pub statement: Statement,
     pub condition: Condition,
 }
 
+/// Statements joined by newlines, `;`, `&&` and `||`: a block's body, an
+/// `if` or `while` condition, or a whole line.
+pub type List = Vec<Executable>;
+
+#[derive(Clone, Debug)]
 pub enum Statement {
+    /// `if LIST { ... } elif LIST { ... } else { ... }`. Each condition is
+    /// a list of commands; the branch taken is the first whose condition
+    /// exits with status 0.
     If {
-        condition: String,
-        body: Vec<Statement>,
-        else_if: Vec<(String, Vec<Statement>)>,
-        else_body: Option<Vec<Statement>>,
+        condition: List,
+        body: List,
+        else_if: Vec<(List, List)>,
+        else_body: Option<List>,
     },
+    /// `while LIST { ... }`: runs the body for as long as the condition
+    /// exits with status 0.
     While {
-        condition: String,
-        body: Vec<Statement>,
+        condition: List,
+        body: List,
     },
     For {
         variable: String,
         values: Vec<String>,
-        body: Vec<Statement>,
+        body: List,
     },
     Command(Command),
     Pipeline(Vec<Command>),

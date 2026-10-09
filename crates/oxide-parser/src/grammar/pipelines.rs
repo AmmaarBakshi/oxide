@@ -92,7 +92,7 @@ impl Parser {
                     }
                 }
                 // Stop parsing this pipeline if we hit logic operators or block closers
-                Token::And | Token::Or | Token::RBrace | Token::Newline => break,
+                Token::And | Token::Or | Token::LBrace | Token::RBrace | Token::Newline => break,
                 _ => self.cursor += 1,
             }
         }

@@ -23,7 +23,7 @@ fn a_quoted_delimiter_keeps_the_body_literal() {
 fn dash_strips_tabs_so_the_body_can_be_indented() {
     run_stdin(
         "heredoc-dash",
-        "if 1 {\n\tcat <<-END\n\t\tindented\n\tEND\n}\n",
+        "if true {\n\tcat <<-END\n\t\tindented\n\tEND\n}\n",
     )
     .assert_ok("indented\n");
 }

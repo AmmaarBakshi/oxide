@@ -1,16 +1,11 @@
+use crate::ast::List;
 use crate::parser::Parser;
 use crate::token::Token;
 
 impl Parser {
-    // Extracts condition strings between keywords (if/elif/while) and '{'
-    pub(crate) fn parse_condition(&mut self) -> String {
-        let mut condition = String::new();
-        while self.cursor < self.tokens.len() && !matches!(self.tokens[self.cursor], Token::LBrace)
-        {
-            condition.push_str(&self.tokens[self.cursor].to_string());
-            condition.push(' ');
-            self.cursor += 1;
-        }
-        condition.trim().to_string()
+    /// Parses the condition of an `if`, `elif` or `while`: a list of
+    /// commands running up to the `{` that opens the body.
+    pub(crate) fn parse_condition(&mut self) -> List {
+        self.parse_list(|token| *token == Token::LBrace)
     }
 }

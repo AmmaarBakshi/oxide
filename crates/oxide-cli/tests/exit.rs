@@ -23,7 +23,7 @@ fn exit_stops_a_script_read_from_stdin() {
 fn exit_inside_a_block_stops_everything() {
     run_c(
         "exit-block",
-        "if 1 { echo in; exit 6; echo not reached }; echo after",
+        "if true { echo in; exit 6; echo not reached }; echo after",
     )
     .assert("in\n", "", 6);
 }

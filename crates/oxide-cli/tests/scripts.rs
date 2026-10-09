@@ -8,7 +8,7 @@ use common::{run_stdin, Oxide};
 fn a_block_can_span_lines() {
     run_stdin(
         "script-block",
-        "if 1 {\n    echo yes\n} else {\n    echo no\n}\necho after\n",
+        "if true {\n    echo yes\n} else {\n    echo no\n}\necho after\n",
     )
     .assert_ok("yes\nafter\n");
 }
@@ -41,7 +41,7 @@ fn comments_are_skipped() {
 fn exit_inside_a_multi_line_block_stops_the_script() {
     run_stdin(
         "script-exit",
-        "if 1 {\n    echo before\n    exit 4\n}\necho after\n",
+        "if true {\n    echo before\n    exit 4\n}\necho after\n",
     )
     .assert("before\n", "", 4);
 }

@@ -1,4 +1,4 @@
-use crate::ast::Statement;
+use crate::ast::{List, Statement};
 use crate::parser::Parser;
 use crate::token::Token;
 
@@ -13,7 +13,7 @@ impl Parser {
         let mut else_if = Vec::new();
         let mut else_body = None;
 
-        while self.cursor < self.tokens.len() {
+        while self.continues_with(&["elif", "else"]) {
             match &self.tokens[self.cursor] {
                 Token::Word(w) if w == "elif" => {
                     self.cursor += 1;
@@ -77,26 +77,33 @@ impl Parser {
         })
     }
 
-    pub(crate) fn parse_block(&mut self) -> Vec<Statement> {
-        let mut block = Vec::new();
-
-        if self.cursor < self.tokens.len() && matches!(self.tokens[self.cursor], Token::LBrace) {
-            self.cursor += 1; // consume '{'
-
-            while self.cursor < self.tokens.len() {
-                if matches!(self.tokens[self.cursor], Token::RBrace) {
-                    self.cursor += 1; // consume '}'
-                    return block;
-                }
-
-                // Call the main parse_statement from parser.rs
-                if let Some(stmt) = self.parse_statement() {
-                    block.push(stmt);
-                } else {
-                    self.cursor += 1;
-                }
-            }
+    /// Parses a `{ ... }` body: a list of statements up to the matching `}`.
+    pub(crate) fn parse_block(&mut self) -> List {
+        if self.tokens.get(self.cursor) != Some(&Token::LBrace) {
+            return List::new();
+        }
+        self.cursor += 1; // consume '{'
+        let block = self.parse_list(|token| *token == Token::RBrace);
+        if self.tokens.get(self.cursor) == Some(&Token::RBrace) {
+            self.cursor += 1; // consume '}'
         }
         block
+    }
+
+    /// Whether the next word, past any newlines, is one of `words`. If so
+    /// the newlines are consumed, so `}` and `else {` may sit on separate
+    /// lines.
+    fn continues_with(&mut self, words: &[&str]) -> bool {
+        let mut ahead = self.cursor;
+        while self.tokens.get(ahead) == Some(&Token::Newline) {
+            ahead += 1;
+        }
+        match self.tokens.get(ahead) {
+            Some(Token::Word(w)) if words.contains(&w.as_str()) => {
+                self.cursor = ahead;
+                true
+            }
+            _ => false,
+        }
     }
 }

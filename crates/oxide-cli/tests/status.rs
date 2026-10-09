@@ -25,13 +25,13 @@ fn stdin_exits_with_its_last_status() {
 
 #[test]
 fn an_if_with_no_branch_taken_succeeds() {
-    let out = run_c("status-if", "cat missing.txt; if 0 { echo no }");
+    let out = run_c("status-if", "cat missing.txt; if false { echo no }");
     assert_eq!((out.stdout.as_str(), out.code), ("", 0), "{:?}", out);
 }
 
 #[test]
 fn a_loop_that_never_runs_succeeds() {
-    let out = run_c("status-while", "cat missing.txt; while 0 { echo no }");
+    let out = run_c("status-while", "cat missing.txt; while false { echo no }");
     assert_eq!(out.code, 0, "{:?}", out);
 }
 

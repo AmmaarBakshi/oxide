@@ -17,7 +17,7 @@ use std::io::{Read, Write};
 
 use oxide_builtins::{Ctx, Io};
 use oxide_compat::CompatMode;
-use oxide_parser::ast::{Assignment, Command, Condition, HereInput, Statement};
+use oxide_parser::ast::{Assignment, Command, Condition, Executable, HereInput, Statement};
 use oxide_parser::expand::{expand_heredoc, expand_string, expand_word, Context};
 use oxide_parser::lexer::Lexer;
 use oxide_parser::parser::Parser;
@@ -246,9 +246,16 @@ impl Executor {
         // PROFILING: Execution Engine
         let exec_timer = oxide_perf::profiler::Profiler::start();
 
-        for exec in &executables {
+        self.execute_list(&executables, env);
+
+        exec_timer.stop("Execution Engine");
+    }
+
+    /// Runs a list of statements, honoring `&&` and `||` between them.
+    fn execute_list(&mut self, list: &[Executable], env: &mut ExecEnv<'_>) {
+        for exec in list {
             if self.exit_status.is_some() {
-                break;
+                return;
             }
 
             // --- LOGIC GATES (&& and ||) ---
@@ -268,17 +275,13 @@ impl Executor {
 
             self.execute_statement(&exec.statement, env);
         }
-
-        exec_timer.stop("Execution Engine");
     }
 
-    fn execute_statements(&mut self, statements: &[Statement], env: &mut ExecEnv<'_>) {
-        for statement in statements {
-            if self.exit_status.is_some() {
-                return;
-            }
-            self.execute_statement(statement, env);
-        }
+    /// Runs a condition list and says whether it succeeded: whether its
+    /// last command exited with status 0.
+    fn condition_holds(&mut self, condition: &[Executable], env: &mut ExecEnv<'_>) -> bool {
+        self.execute_list(condition, env);
+        self.exit_status.is_none() && *env.last_exit_code == 0
     }
 
     fn execute_statement(&mut self, statement: &Statement, env: &mut ExecEnv<'_>) {
@@ -291,29 +294,34 @@ impl Executor {
                 else_if,
                 else_body,
             } => {
-                if self.evaluate_if_condition(condition, env) {
-                    self.execute_statements(body, env);
+                if self.condition_holds(condition, env) {
+                    self.execute_list(body, env);
                     return;
                 }
                 for (else_if_condition, else_if_body) in else_if {
-                    if self.evaluate_if_condition(else_if_condition, env) {
-                        self.execute_statements(else_if_body, env);
+                    if self.condition_holds(else_if_condition, env) {
+                        self.execute_list(else_if_body, env);
                         return;
                     }
                 }
                 if let Some(else_statements) = else_body {
-                    self.execute_statements(else_statements, env);
-                } else {
+                    self.execute_list(else_statements, env);
+                } else if self.exit_status.is_none() {
                     // No branch ran, which counts as success.
                     *env.last_exit_code = 0;
                 }
             }
             Statement::While { condition, body } => {
                 // A loop whose body never runs succeeds; otherwise its status
-                // is that of the last command the body ran.
-                *env.last_exit_code = 0;
-                while self.exit_status.is_none() && self.evaluate_if_condition(condition, env) {
-                    self.execute_statements(body, env);
+                // is that of the last command the body ran, not the failed
+                // condition that ended it.
+                let mut status = 0;
+                while self.condition_holds(condition, env) {
+                    self.execute_list(body, env);
+                    status = *env.last_exit_code;
+                }
+                if self.exit_status.is_none() {
+                    *env.last_exit_code = status;
                 }
             }
             Statement::For {
@@ -330,16 +338,11 @@ impl Executor {
                             return;
                         }
                         self.set_var(variable, final_val);
-                        self.execute_statements(body, env);
+                        self.execute_list(body, env);
                     }
                 }
             }
         }
-    }
-
-    fn evaluate_if_condition(&mut self, condition: &str, env: &mut ExecEnv<'_>) -> bool {
-        let val = expand_string(condition, &mut self.context(env));
-        !val.is_empty() && val != "0" && val != "false"
     }
 
     // ==========================================
@@ -586,15 +589,11 @@ impl Executor {
                 match std::fs::read_to_string(file) {
                     Ok(contents) => {
                         let tokens = Lexer::new(&contents).tokenize();
-                        let statements: Vec<Statement> = Parser::new(tokens)
-                            .parse()
-                            .into_iter()
-                            .map(|e| e.statement)
-                            .collect();
+                        let list = Parser::new(tokens).parse();
                         // A sourced file runs in *this* shell, so it goes
                         // through the executor, not the script runtime.
-                        self.execute_statements(&statements, env);
-                        0
+                        self.execute_list(&list, env);
+                        *env.last_exit_code
                     }
                     Err(e) => {
                         eprintln!("oxide: source: cannot open file '{}': {}", file, e);

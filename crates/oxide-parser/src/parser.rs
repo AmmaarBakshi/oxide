@@ -1,4 +1,4 @@
-use crate::ast::{Condition, Executable, Statement};
+use crate::ast::{Condition, Executable, List, Statement};
 use crate::token::Token;
 
 pub struct Parser {
@@ -12,6 +12,13 @@ impl Parser {
     }
 
     pub fn parse(&mut self) -> Vec<Executable> {
+        self.parse_list(|_| false)
+    }
+
+    /// Parses statements joined by newlines, `;`, `&&` and `||`, up to the
+    /// first token at the start of a statement that `stop` accepts (left
+    /// unconsumed), or the end of the input.
+    pub(crate) fn parse_list(&mut self, stop: impl Fn(&Token) -> bool) -> List {
         let mut executables = Vec::new();
         let mut current_condition = Condition::Always;
 
@@ -22,7 +29,7 @@ impl Parser {
             {
                 self.cursor += 1;
             }
-            if self.cursor >= self.tokens.len() {
+            if self.cursor >= self.tokens.len() || stop(&self.tokens[self.cursor]) {
                 break;
             }
 
@@ -40,19 +47,17 @@ impl Parser {
                 self.cursor += 1;
             }
 
-            if self.cursor < self.tokens.len() {
-                match &self.tokens[self.cursor] {
-                    Token::And => {
-                        current_condition = Condition::And;
-                        self.cursor += 1;
-                    }
-                    Token::Or => {
-                        current_condition = Condition::Or;
-                        self.cursor += 1;
-                    }
-                    _ => {
-                        current_condition = Condition::Always;
-                    }
+            current_condition = Condition::Always;
+            if let Some(op @ (Token::And | Token::Or)) = self.tokens.get(self.cursor) {
+                current_condition = if *op == Token::And {
+                    Condition::And
+                } else {
+                    Condition::Or
+                };
+                self.cursor += 1;
+                // `&&` or `||` at the end of a line carries on to the next.
+                while self.tokens.get(self.cursor) == Some(&Token::Newline) {
+                    self.cursor += 1;
                 }
             }
         }
@@ -168,6 +173,54 @@ mod tests {
         assert_eq!(cmd.args, ["b"]);
         assert_eq!(cmd.here, Some(HereInput::String("\"$X b\"".into())));
         assert_eq!(cmd.outfile.as_deref(), Some("out"));
+    }
+
+    fn first_statement(input: &str) -> Statement {
+        Parser::new(Lexer::new(input).tokenize())
+            .parse()
+            .remove(0)
+            .statement
+    }
+
+    #[test]
+    fn an_if_condition_is_a_list_of_commands() {
+        let Statement::If {
+            condition,
+            body,
+            else_if,
+            else_body,
+        } = first_statement(
+            "if test -f x && grep -q y z { echo a } elif false { echo b } else { echo c }",
+        )
+        else {
+            panic!("expected an if");
+        };
+        assert_eq!(condition.len(), 2);
+        assert!(matches!(condition[1].condition, Condition::And));
+        assert_eq!(body.len(), 1);
+        assert_eq!(else_if.len(), 1);
+        assert_eq!(else_body.map(|b| b.len()), Some(1));
+    }
+
+    #[test]
+    fn else_may_start_on_the_next_line() {
+        let Statement::If { else_body, .. } = first_statement("if false {\n  a\n}\nelse {\n  b\n}")
+        else {
+            panic!("expected an if");
+        };
+        assert!(else_body.is_some());
+    }
+
+    #[test]
+    fn a_block_keeps_its_and_or_chains() {
+        let Statement::While { body, .. } = first_statement("while true { a && b || c }") else {
+            panic!("expected a while");
+        };
+        let conditions: Vec<_> = body.iter().map(|e| e.condition.clone()).collect();
+        assert!(matches!(
+            conditions[..],
+            [Condition::Always, Condition::And, Condition::Or]
+        ));
     }
 
     #[test]
