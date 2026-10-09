@@ -23,6 +23,8 @@ pub struct Output {
     pub stdout: String,
     pub stderr: String,
     pub code: i32,
+    /// The process id the shell ran as.
+    pub pid: u32,
 }
 
 impl Output {
@@ -118,6 +120,7 @@ impl Oxide {
         }
 
         let mut child = cmd.spawn().expect("spawn oxide");
+        let pid = child.id();
         let mut stdin = child.stdin.take().expect("child stdin");
         let input = self.stdin.clone();
         // Feed stdin from a thread so a large input can't deadlock against
@@ -132,6 +135,7 @@ impl Oxide {
             stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
             stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
             code: out.status.code().unwrap_or(-1),
+            pid,
         }
     }
 }

@@ -208,10 +208,10 @@ enum Dollar {
 /// Reads what follows a `$` (already consumed) and expands it.
 fn dollar(chars: &mut Peekable<Chars<'_>>, ctx: &dyn Context) -> Dollar {
     match chars.peek() {
-        // `$?`: the exit status of the last command.
-        Some('?') => {
+        // `$?`: the exit status of the last command; `$$`: the shell's pid.
+        Some(&c @ ('?' | '$')) => {
             chars.next();
-            Dollar::Value(lookup("?", ctx))
+            Dollar::Value(lookup(&c.to_string(), ctx))
         }
         Some('{') => {
             chars.next();
@@ -249,6 +249,11 @@ fn dollar(chars: &mut Peekable<Chars<'_>>, ctx: &dyn Context) -> Dollar {
 
 /// A variable's value; unset reads as empty.
 fn lookup(name: &str, ctx: &dyn Context) -> String {
+    if name == "$" {
+        // Every command runs inside this one process, subshells included,
+        // so its id is the shell's id everywhere.
+        return std::process::id().to_string();
+    }
     ctx.lookup(name).unwrap_or_default()
 }
 
@@ -318,6 +323,14 @@ mod tests {
         assert_eq!(expand_word("$?", &Status(3)), ["3"]);
         assert_eq!(expand_string("[${?}]", &Status(127)), "[127]");
         assert_eq!(expand_string("'$?'", &Status(3)), "$?");
+    }
+
+    #[test]
+    fn dollar_dollar_is_the_process_id() {
+        let pid = std::process::id().to_string();
+        assert_eq!(words("$$"), std::slice::from_ref(&pid));
+        assert_eq!(string("pid-${$}.log"), format!("pid-{}.log", pid));
+        assert_eq!(string("'$$'"), "$$");
     }
 
     #[test]
