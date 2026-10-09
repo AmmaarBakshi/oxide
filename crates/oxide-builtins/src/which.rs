@@ -46,7 +46,7 @@ pub fn run(args: &[String], io: &mut Io<'_>, ctx: &mut Ctx<'_>) -> i32 {
     status
 }
 
-fn is_builtin(name: &str) -> bool {
+pub(crate) fn is_builtin(name: &str) -> bool {
     registry().contains(name) || EXECUTOR_BUILTINS.contains(&name)
 }
 
@@ -57,7 +57,7 @@ fn is_builtin(name: &str) -> bool {
 /// each `PATH` directory is tried for the exact name and then, on Windows,
 /// with `.exe` appended. A name containing a path separator is checked as
 /// given rather than searched for.
-fn search_path(name: &str, all: bool) -> Vec<PathBuf> {
+pub(crate) fn search_path(name: &str, all: bool) -> Vec<PathBuf> {
     let dirs: Vec<PathBuf> = if name.contains(path::is_separator) {
         vec![PathBuf::new()]
     } else {

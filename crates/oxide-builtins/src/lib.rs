@@ -47,6 +47,7 @@ pub mod sort;
 pub mod tail;
 pub mod top;
 pub mod touch;
+pub mod type_;
 pub mod uniq;
 pub mod unset;
 pub mod wc;
