@@ -61,10 +61,19 @@ mod tests {
 
     #[test]
     fn rejects_anything_but_numeric_pids() {
-        for args in [&["abc"][..], &["/IM", "explorer.exe"], &["-9"], &["123", "x"]] {
+        for args in [
+            &["abc"][..],
+            &["/IM", "explorer.exe"],
+            &["-9"],
+            &["123", "x"],
+        ] {
             let out = run("kill", args, "");
             assert_eq!(out.status, 1, "args: {:?}", args);
-            assert!(out.stderr.contains("invalid process ID"), "args: {:?}", args);
+            assert!(
+                out.stderr.contains("invalid process ID"),
+                "args: {:?}",
+                args
+            );
         }
     }
 }

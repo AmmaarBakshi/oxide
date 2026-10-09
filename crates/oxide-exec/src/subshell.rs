@@ -1,6 +1,6 @@
+use oxide_compat::CompatMode;
 use std::collections::HashMap;
 use std::env;
-use oxide_compat::CompatMode;
 
 pub fn execute(
     inner_commands: &str,

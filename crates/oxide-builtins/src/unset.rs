@@ -41,7 +41,12 @@ mod tests {
         std::env::set_var("OXIDE_TEST_UNSET_C", "3");
         let out = run("unset", &["", "A=B", "OXIDE_TEST_UNSET_C"], "");
         assert_eq!(out.status, 1);
-        assert_eq!(out.stderr.matches("not a valid identifier").count(), 2, "{}", out.stderr);
+        assert_eq!(
+            out.stderr.matches("not a valid identifier").count(),
+            2,
+            "{}",
+            out.stderr
+        );
         assert!(std::env::var_os("OXIDE_TEST_UNSET_C").is_none());
     }
 }

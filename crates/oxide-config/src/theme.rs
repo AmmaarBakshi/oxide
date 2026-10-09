@@ -91,7 +91,9 @@ pub fn named(name: &str) -> Option<Theme> {
 
     Some(match name {
         // Oxide's signature look: rusty-orange accent on a full palette.
-        "default" => build("#B7410E", "red", "yellow", "green", "cyan", "dim", "#B7410E"),
+        "default" => build(
+            "#B7410E", "red", "yellow", "green", "cyan", "dim", "#B7410E",
+        ),
         // Brighter hues that read well on dark backgrounds.
         "dark" => build(
             "#E8A87C", "#FF6B6B", "#F4D35E", "#A3D9A5", "#7FD4E0", "dim", "#E8A87C",

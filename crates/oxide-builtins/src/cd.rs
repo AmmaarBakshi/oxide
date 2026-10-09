@@ -63,8 +63,11 @@ mod tests {
         let before = std::env::current_dir().unwrap();
         let out = run("cd", &["My", "Documents"], "");
         assert_eq!(out.status, 1);
-        assert_eq!(out.stderr, "oxide: cd: too many arguments
-");
+        assert_eq!(
+            out.stderr,
+            "oxide: cd: too many arguments
+"
+        );
         assert_eq!(std::env::current_dir().unwrap(), before);
     }
 }

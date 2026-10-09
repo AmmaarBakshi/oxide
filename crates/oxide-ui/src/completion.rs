@@ -83,10 +83,7 @@ fn word_start(line: &str, pos: usize) -> usize {
 /// first token, or the first token after a `|`, `;`, or `&`.
 fn in_command_position(line: &str, start: usize) -> bool {
     let before = line[..start].trim_end();
-    before.is_empty()
-        || before.ends_with('|')
-        || before.ends_with(';')
-        || before.ends_with('&')
+    before.is_empty() || before.ends_with('|') || before.ends_with(';') || before.ends_with('&')
 }
 
 /// Builtins plus every executable name found on `PATH`, sorted and deduped.

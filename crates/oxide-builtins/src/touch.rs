@@ -50,7 +50,12 @@ mod tests {
         let (old, new) = (dir.join("old.txt"), dir.join("new.txt"));
         fs::write(&old, "keep").unwrap();
         let an_hour_ago = SystemTime::now() - Duration::from_secs(3600);
-        fs::File::options().write(true).open(&old).unwrap().set_modified(an_hour_ago).unwrap();
+        fs::File::options()
+            .write(true)
+            .open(&old)
+            .unwrap()
+            .set_modified(an_hour_ago)
+            .unwrap();
 
         let out = run("touch", &[old.to_str().unwrap(), new.to_str().unwrap()], "");
         assert_eq!(out.status, 0, "{}", out.stderr);
@@ -65,9 +70,17 @@ mod tests {
         let dir = scratch_dir("touch_failure");
         let (bad, good) = (dir.join("missing").join("x.txt"), dir.join("good.txt"));
 
-        let out = run("touch", &[bad.to_str().unwrap(), good.to_str().unwrap()], "");
+        let out = run(
+            "touch",
+            &[bad.to_str().unwrap(), good.to_str().unwrap()],
+            "",
+        );
         assert_eq!(out.status, 1);
-        assert!(out.stderr.starts_with("touch: cannot touch"), "{}", out.stderr);
+        assert!(
+            out.stderr.starts_with("touch: cannot touch"),
+            "{}",
+            out.stderr
+        );
         assert!(good.is_file());
         fs::remove_dir_all(dir).unwrap();
     }
@@ -79,7 +92,11 @@ mod tests {
 
         let out = run("touch", &["-c", dir.join("x.txt").to_str().unwrap()], "");
         assert_eq!(out.status, 1);
-        assert!(out.stderr.contains("invalid option -- 'c'"), "{}", out.stderr);
+        assert!(
+            out.stderr.contains("invalid option -- 'c'"),
+            "{}",
+            out.stderr
+        );
         assert!(!dir.join("x.txt").exists());
 
         let out = run("touch", &["--", flag_like.to_str().unwrap()], "");

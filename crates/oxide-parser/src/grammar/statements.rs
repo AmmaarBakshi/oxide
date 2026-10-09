@@ -1,15 +1,15 @@
-use crate::parser::Parser;
 use crate::ast::Statement;
+use crate::parser::Parser;
 use crate::token::Token;
 
 // We are adding methods to the Parser struct from another file!
 impl Parser {
     pub(crate) fn parse_if_statement(&mut self) -> Option<Statement> {
         self.cursor += 1; // consume 'if'
-        
+
         let condition = self.parse_condition();
         let body = self.parse_block();
-        
+
         let mut else_if = Vec::new();
         let mut else_body = None;
 
@@ -24,26 +24,31 @@ impl Parser {
                 Token::Word(w) if w == "else" => {
                     self.cursor += 1;
                     else_body = Some(self.parse_block());
-                    break; 
+                    break;
                 }
                 _ => break,
             }
         }
 
-        Some(Statement::If { condition, body, else_if, else_body })
+        Some(Statement::If {
+            condition,
+            body,
+            else_if,
+            else_body,
+        })
     }
 
     pub(crate) fn parse_while_statement(&mut self) -> Option<Statement> {
         self.cursor += 1; // consume 'while'
-        let condition = self.parse_condition(); 
+        let condition = self.parse_condition();
         let body = self.parse_block();
-        
+
         Some(Statement::While { condition, body })
     }
 
     pub(crate) fn parse_for_statement(&mut self) -> Option<Statement> {
         self.cursor += 1; // consume 'for'
-        
+
         let mut variable = String::new();
         if let Token::Word(w) = &self.tokens[self.cursor] {
             variable = w.clone();
@@ -51,23 +56,30 @@ impl Parser {
         }
 
         // consume 'in'
-        if self.cursor < self.tokens.len() && matches!(self.tokens[self.cursor], Token::Word(ref w) if w == "in") {
+        if self.cursor < self.tokens.len()
+            && matches!(self.tokens[self.cursor], Token::Word(ref w) if w == "in")
+        {
             self.cursor += 1;
         }
 
         let mut values = Vec::new();
-        while self.cursor < self.tokens.len() && !matches!(self.tokens[self.cursor], Token::LBrace) {
+        while self.cursor < self.tokens.len() && !matches!(self.tokens[self.cursor], Token::LBrace)
+        {
             values.push(self.tokens[self.cursor].to_string());
             self.cursor += 1;
         }
 
         let body = self.parse_block();
-        Some(Statement::For { variable, values, body })
+        Some(Statement::For {
+            variable,
+            values,
+            body,
+        })
     }
 
     pub(crate) fn parse_block(&mut self) -> Vec<Statement> {
         let mut block = Vec::new();
-        
+
         if self.cursor < self.tokens.len() && matches!(self.tokens[self.cursor], Token::LBrace) {
             self.cursor += 1; // consume '{'
 

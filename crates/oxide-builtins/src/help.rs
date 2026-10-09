@@ -11,7 +11,11 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
                 None if EXECUTOR_BUILTINS.contains(&name.as_str())
                     || REPL_BUILTINS.contains(&name.as_str()) =>
                 {
-                    wln!(io, "{} — built in to the shell; no detailed help yet.", name)
+                    wln!(
+                        io,
+                        "{} — built in to the shell; no detailed help yet.",
+                        name
+                    )
                 }
                 None => {
                     ewln!(io, "oxide: help: no such builtin '{}'", name);
@@ -54,9 +58,15 @@ pwd — print the working directory
     fn an_unknown_name_fails_but_the_rest_are_still_shown() {
         let out = run("help", &["nope", "cd"], "");
         assert_eq!(out.status, 1);
-        assert_eq!(out.stdout, "cd — change the working directory
-");
-        assert_eq!(out.stderr, "oxide: help: no such builtin 'nope'
-");
+        assert_eq!(
+            out.stdout,
+            "cd — change the working directory
+"
+        );
+        assert_eq!(
+            out.stderr,
+            "oxide: help: no such builtin 'nope'
+"
+        );
     }
 }

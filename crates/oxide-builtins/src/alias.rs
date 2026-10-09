@@ -52,7 +52,10 @@ mod tests {
     #[test]
     fn lists_aliases_sorted() {
         let out = run_with_aliases("alias", &[], &ALIASES);
-        assert_eq!(out.stdout, "alias cls='clear'\nalias g='grep'\nalias ll='ls -a'\n");
+        assert_eq!(
+            out.stdout,
+            "alias cls='clear'\nalias g='grep'\nalias ll='ls -a'\n"
+        );
     }
 
     #[test]

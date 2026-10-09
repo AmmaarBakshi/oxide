@@ -21,7 +21,11 @@ impl<'a> Io<'a> {
         stdout: &'a mut dyn Write,
         stderr: &'a mut dyn Write,
     ) -> Self {
-        Self { stdin, stdout, stderr }
+        Self {
+            stdin,
+            stdout,
+            stderr,
+        }
     }
 
     /// Feeds each input operand to `f` in turn, the way `cat`, `head` and
@@ -36,14 +40,19 @@ impl<'a> Io<'a> {
     where
         F: FnMut(&str, &mut dyn BufRead, &mut dyn Write) -> std::io::Result<()>,
     {
-        let operands = if operands.is_empty() { &["-"] } else { operands };
+        let operands = if operands.is_empty() {
+            &["-"]
+        } else {
+            operands
+        };
 
         let mut status = 0;
         for &name in operands {
             let result = if name == "-" {
                 f(name, &mut *self.stdin, &mut *self.stdout)
             } else {
-                File::open(name).and_then(|file| f(name, &mut BufReader::new(file), &mut *self.stdout))
+                File::open(name)
+                    .and_then(|file| f(name, &mut BufReader::new(file), &mut *self.stdout))
             };
             match result {
                 Ok(()) => {}

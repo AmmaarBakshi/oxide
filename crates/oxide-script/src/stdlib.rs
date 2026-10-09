@@ -8,8 +8,10 @@ pub struct StdLib {
 
 impl StdLib {
     pub fn new() -> Self {
-        let mut lib = Self { native_functions: HashMap::new() };
-        
+        let mut lib = Self {
+            native_functions: HashMap::new(),
+        };
+
         // Add a 'math_add' native function
         lib.native_functions.insert("math_add".to_string(), |args| {
             let sum: i32 = args.iter().map(|s| s.parse::<i32>().unwrap_or(0)).sum();
@@ -17,9 +19,10 @@ impl StdLib {
         });
 
         // Add a 'str_upper' native function
-        lib.native_functions.insert("str_upper".to_string(), |args| {
-            args.join(" ").to_uppercase()
-        });
+        lib.native_functions
+            .insert("str_upper".to_string(), |args| {
+                args.join(" ").to_uppercase()
+            });
 
         lib
     }

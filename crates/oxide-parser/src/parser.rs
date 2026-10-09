@@ -1,5 +1,5 @@
+use crate::ast::{Condition, Executable, Statement};
 use crate::token::Token;
-use crate::ast::{Statement, Condition, Executable};
 
 pub struct Parser {
     pub(crate) tokens: Vec<Token>,
@@ -17,7 +17,9 @@ impl Parser {
 
         while self.cursor < self.tokens.len() {
             // Skip separators
-            while self.cursor < self.tokens.len() && matches!(self.tokens[self.cursor], Token::Newline | Token::Semicolon) {
+            while self.cursor < self.tokens.len()
+                && matches!(self.tokens[self.cursor], Token::Newline | Token::Semicolon)
+            {
                 self.cursor += 1;
             }
             if self.cursor >= self.tokens.len() {
@@ -58,7 +60,9 @@ impl Parser {
     }
 
     pub(crate) fn parse_statement(&mut self) -> Option<Statement> {
-        if self.cursor >= self.tokens.len() { return None; }
+        if self.cursor >= self.tokens.len() {
+            return None;
+        }
 
         // 1. Check if the statement starts with a logic keyword
         if let Token::Word(w) = &self.tokens[self.cursor] {

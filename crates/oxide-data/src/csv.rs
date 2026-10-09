@@ -22,7 +22,7 @@ pub fn parse(raw_text: &str) -> Result<Table, String> {
         };
 
         let mut row = Vec::new();
-        
+
         // 4. Smart Data Typing: Guess what type of data is in the cell
         for field in record.iter() {
             if field.is_empty() {
@@ -37,7 +37,7 @@ pub fn parse(raw_text: &str) -> Result<Table, String> {
                 row.push(Value::String(field.to_string())); // Default to text
             }
         }
-        
+
         table.add_row(row);
     }
 

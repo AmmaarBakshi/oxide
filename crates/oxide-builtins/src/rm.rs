@@ -21,7 +21,10 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
         if force {
             return 0;
         }
-        ewln!(io, "oxide: rm: missing operand (e.g., 'rm file.txt' or 'rm -r dir')");
+        ewln!(
+            io,
+            "oxide: rm: missing operand (e.g., 'rm file.txt' or 'rm -r dir')"
+        );
         return 1;
     }
 
@@ -31,14 +34,22 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
         // `rm -r .` would empty the working directory before failing on the
         // directory itself, so refuse it up front as coreutils does.
         if is_dot_or_dotdot(path) {
-            ewln!(io, "oxide: rm: refusing to remove '.' or '..' directory: skipping '{}'", arg);
+            ewln!(
+                io,
+                "oxide: rm: refusing to remove '.' or '..' directory: skipping '{}'",
+                arg
+            );
             status = 1;
             continue;
         }
         let result = if path.is_dir() {
             // Deleting a whole tree has to be asked for explicitly.
             if !recursive {
-                ewln!(io, "oxide: rm: cannot remove '{}': is a directory (use -r)", arg);
+                ewln!(
+                    io,
+                    "oxide: rm: cannot remove '{}': is a directory (use -r)",
+                    arg
+                );
                 status = 1;
                 continue;
             }
@@ -118,7 +129,12 @@ mod tests {
         let dotdot = format!("{}/../", sub.to_str().unwrap());
         let out = run("rm", &["-rf", &dot, &dotdot, file.to_str().unwrap()], "");
         assert_eq!(out.status, 1);
-        assert_eq!(out.stderr.matches("refusing to remove").count(), 2, "{}", out.stderr);
+        assert_eq!(
+            out.stderr.matches("refusing to remove").count(),
+            2,
+            "{}",
+            out.stderr
+        );
         assert!(sub.join("keep.txt").exists());
         assert!(!file.exists());
         fs::remove_dir_all(dir).unwrap();

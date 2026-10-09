@@ -1,5 +1,5 @@
-use crate::parser::Parser;
 use crate::ast::{Command, Statement};
+use crate::parser::Parser;
 use crate::token::Token;
 
 impl Parser {
@@ -27,7 +27,9 @@ impl Parser {
                 Token::RedirectOut => {
                     self.cursor += 1;
                     if self.cursor < self.tokens.len() {
-                        if let Token::Word(file) | Token::StringLiteral(file) = &self.tokens[self.cursor] {
+                        if let Token::Word(file) | Token::StringLiteral(file) =
+                            &self.tokens[self.cursor]
+                        {
                             if let Some(cmd) = &mut current_cmd {
                                 cmd.outfile = Some(file.clone());
                                 cmd.append = false;
@@ -39,7 +41,9 @@ impl Parser {
                 Token::RedirectAppend => {
                     self.cursor += 1;
                     if self.cursor < self.tokens.len() {
-                        if let Token::Word(file) | Token::StringLiteral(file) = &self.tokens[self.cursor] {
+                        if let Token::Word(file) | Token::StringLiteral(file) =
+                            &self.tokens[self.cursor]
+                        {
                             if let Some(cmd) = &mut current_cmd {
                                 cmd.outfile = Some(file.clone());
                                 cmd.append = true;
@@ -51,7 +55,9 @@ impl Parser {
                 Token::RedirectIn => {
                     self.cursor += 1;
                     if self.cursor < self.tokens.len() {
-                        if let Token::Word(file) | Token::StringLiteral(file) = &self.tokens[self.cursor] {
+                        if let Token::Word(file) | Token::StringLiteral(file) =
+                            &self.tokens[self.cursor]
+                        {
                             if let Some(cmd) = &mut current_cmd {
                                 cmd.infile = Some(file.clone());
                             }

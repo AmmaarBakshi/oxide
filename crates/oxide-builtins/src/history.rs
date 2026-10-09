@@ -66,7 +66,13 @@ mod tests {
     fn a_count_shows_the_last_entries() {
         let out = run_with_history("history", &["2"], &HISTORY);
         assert_eq!(out.stdout, "    2  cd src\n    3  cat main.rs\n");
-        assert_eq!(run_with_history("history", &["10"], &HISTORY).stdout.lines().count(), 3);
+        assert_eq!(
+            run_with_history("history", &["10"], &HISTORY)
+                .stdout
+                .lines()
+                .count(),
+            3
+        );
     }
 
     #[test]

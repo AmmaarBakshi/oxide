@@ -35,7 +35,9 @@ pub struct Registry {
 
 impl Registry {
     fn new() -> Self {
-        Self { map: BTreeMap::new() }
+        Self {
+            map: BTreeMap::new(),
+        }
     }
 
     /// Registers a builtin under its own [`Builtin::name`].

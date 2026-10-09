@@ -7,7 +7,14 @@ pub fn run(_args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
     let mut sys = System::new_all();
     sys.refresh_all(); // Grab the latest CPU/Memory data
 
-    wln!(io, "{:<10} {:<30} {:<10} {}", "PID", "NAME", "CPU%", "MEMORY(MB)");
+    wln!(
+        io,
+        "{:<10} {:<30} {:<10} {}",
+        "PID",
+        "NAME",
+        "CPU%",
+        "MEMORY(MB)"
+    );
     wln!(io, "{:-<10} {:-<30} {:-<10} {:-<10}", "", "", "", "");
 
     for (pid, process) in sys.processes() {

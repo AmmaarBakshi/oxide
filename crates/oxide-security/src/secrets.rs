@@ -5,7 +5,11 @@ pub struct SecretStore {
 impl SecretStore {
     pub fn new() -> Self {
         Self {
-            keys: vec!["PASSWORD".to_string(), "TOKEN".to_string(), "SECRET".to_string()],
+            keys: vec![
+                "PASSWORD".to_string(),
+                "TOKEN".to_string(),
+                "SECRET".to_string(),
+            ],
         }
     }
 

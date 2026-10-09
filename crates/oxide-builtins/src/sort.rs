@@ -108,7 +108,10 @@ mod tests {
 
     #[test]
     fn sorts_bytewise_by_default() {
-        assert_eq!(run("sort", &[], "pear\nApple\napple\n").stdout, "Apple\napple\npear\n");
+        assert_eq!(
+            run("sort", &[], "pear\nApple\napple\n").stdout,
+            "Apple\napple\npear\n"
+        );
     }
 
     #[test]

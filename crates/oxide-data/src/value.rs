@@ -9,7 +9,7 @@ pub enum Value {
     Float(f64),
     Bool(bool),
     List(Vec<Value>),
-    Record(HashMap<String, Value>), 
+    Record(HashMap<String, Value>),
 }
 
 impl Value {

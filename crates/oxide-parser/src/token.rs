@@ -13,9 +13,9 @@ pub enum Token {
     Or,
     Pipe,
     RedirectOut,
-    RedirectAppend,  // >>
-    RedirectIn,  // Add this
-    Background,  // Add this
+    RedirectAppend, // >>
+    RedirectIn,     // Add this
+    Background,     // Add this
     Newline,
     Semicolon,
     While,
@@ -40,8 +40,8 @@ impl fmt::Display for Token {
             Token::Pipe => write!(f, "|"),
             Token::RedirectOut => write!(f, ">"),
             Token::RedirectAppend => write!(f, ">>"),
-            Token::RedirectIn => write!(f, "<"),     // Add this
-            Token::Background => write!(f, "&"),     // Add this
+            Token::RedirectIn => write!(f, "<"), // Add this
+            Token::Background => write!(f, "&"), // Add this
             Token::Newline => write!(f, "\n"),
             Token::Semicolon => write!(f, ";"),
         }

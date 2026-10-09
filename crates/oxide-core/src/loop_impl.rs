@@ -1,6 +1,6 @@
 use crate::shell::Shell;
-use std::fs::File;
 use std::env;
+use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 use rustyline::error::ReadlineError;
@@ -12,7 +12,6 @@ impl Shell {
     // MODE 1: INTERACTIVE KEYBOARD (REPL)
     // ==========================================
     pub fn run_repl(&mut self) -> anyhow::Result<()> {
-
         // 1. Turn on the Signal Shield!
         oxide_exec::signals::init();
 
@@ -37,7 +36,9 @@ impl Shell {
             match rl.readline(&prompt) {
                 Ok(line) => {
                     let trimmed = line.trim();
-                    if trimmed.is_empty() { continue; }
+                    if trimmed.is_empty() {
+                        continue;
+                    }
                     rl.add_history_entry(trimmed)?;
                     if trimmed == "exit" {
                         self.state.is_running = false;
@@ -46,10 +47,19 @@ impl Shell {
                     self.state.history.push(trimmed.to_string());
                     history::append(trimmed);
                     self.execute_line(trimmed);
-                },
-                Err(ReadlineError::Interrupted) => { println!("^C"); continue; },
-                Err(ReadlineError::Eof) => { self.state.is_running = false; break; },
-                Err(err) => { println!("Error: {:?}", err); break; }
+                }
+                Err(ReadlineError::Interrupted) => {
+                    println!("^C");
+                    continue;
+                }
+                Err(ReadlineError::Eof) => {
+                    self.state.is_running = false;
+                    break;
+                }
+                Err(err) => {
+                    println!("Error: {:?}", err);
+                    break;
+                }
             }
         }
         let history_path = history::history_path();
@@ -67,7 +77,7 @@ impl Shell {
         for line in reader.lines() {
             let line = line?;
             let trimmed = line.trim();
-            
+
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }
@@ -87,10 +97,10 @@ impl Shell {
     // ==========================================
     pub fn execute_line(&mut self, input: &str) {
         // Clean up any background jobs that finished while we were typing
-        self.state.job_manager.check_completed(); 
-        
+        self.state.job_manager.check_completed();
+
         let mut executor = oxide_exec::executor::Executor::new();
-        
+
         executor.execute_line(
             input,
             &mut self.state.mode,

@@ -7,7 +7,9 @@ pub struct ModuleManager {
 
 impl ModuleManager {
     pub fn new() -> Self {
-        Self { search_paths: vec![PathBuf::from("./modules")] }
+        Self {
+            search_paths: vec![PathBuf::from("./modules")],
+        }
     }
 
     pub fn load_module(&self, name: &str) -> Result<String, String> {
@@ -18,9 +20,11 @@ impl ModuleManager {
         }
 
         // 2. Debug: Print where we are actually looking
-        println!("DEBUG: Searching for module at: {:?}", path.canonicalize().unwrap_or(path.clone()));
+        println!(
+            "DEBUG: Searching for module at: {:?}",
+            path.canonicalize().unwrap_or(path.clone())
+        );
 
-        std::fs::read_to_string(&path)
-            .map_err(|e| format!("Module '{}' not found: {}", name, e))
+        std::fs::read_to_string(&path).map_err(|e| format!("Module '{}' not found: {}", name, e))
     }
 }

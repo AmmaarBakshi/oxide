@@ -64,8 +64,14 @@ mod tests {
     #[test]
     fn rejects_unknown_flags() {
         let args = strings(&["-rx"]);
-        assert_eq!(parse_flags(&args, "r").unwrap_err(), "invalid option -- 'x'");
+        assert_eq!(
+            parse_flags(&args, "r").unwrap_err(),
+            "invalid option -- 'x'"
+        );
         let args = strings(&["--reverse"]);
-        assert_eq!(parse_flags(&args, "r").unwrap_err(), "unrecognized option '--reverse'");
+        assert_eq!(
+            parse_flags(&args, "r").unwrap_err(),
+            "unrecognized option '--reverse'"
+        );
     }
 }

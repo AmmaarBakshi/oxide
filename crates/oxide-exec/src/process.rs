@@ -1,5 +1,5 @@
-use std::process::{Child, Command};
 use crate::redirect;
+use std::process::{Child, Command};
 
 /// Runs a single command and returns its exit code
 pub fn spawn_single(
@@ -42,5 +42,7 @@ pub fn spawn_background(
     redirect::apply_input(&mut process, infile);
     redirect::apply_output(&mut process, outfile, append);
 
-    process.spawn().map_err(|e| format!("oxide: failed to spawn {}: {}", program, e))
+    process
+        .spawn()
+        .map_err(|e| format!("oxide: failed to spawn {}: {}", program, e))
 }

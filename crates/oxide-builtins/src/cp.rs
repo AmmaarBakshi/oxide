@@ -17,7 +17,10 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
     let recursive = flags.contains(['r', 'R']);
 
     let Some((dest, sources)) = operands.split_last().filter(|(_, s)| !s.is_empty()) else {
-        ewln!(io, "cp: missing destination operand (e.g., 'cp a.txt b.txt' or 'cp -r src dir')");
+        ewln!(
+            io,
+            "cp: missing destination operand (e.g., 'cp a.txt b.txt' or 'cp -r src dir')"
+        );
         return 1;
     };
 
@@ -69,12 +72,21 @@ pub(crate) fn destinations<'a>(
 /// copy-then-delete when a rename can't cross filesystems.
 pub(crate) fn copy_path(src: &Path, dst: &Path, recursive: bool) -> Result<(), String> {
     let meta = fs::metadata(src).map_err(|e| format!("cannot stat '{}': {}", src.display(), e))?;
-    let failed =
-        |e: io::Error| format!("cannot copy '{}' to '{}': {}", src.display(), dst.display(), e);
+    let failed = |e: io::Error| {
+        format!(
+            "cannot copy '{}' to '{}': {}",
+            src.display(),
+            dst.display(),
+            e
+        )
+    };
 
     if meta.is_dir() {
         if !recursive {
-            return Err(format!("-r not specified; omitting directory '{}'", src.display()));
+            return Err(format!(
+                "-r not specified; omitting directory '{}'",
+                src.display()
+            ));
         }
         // Otherwise the walk would keep finding the copy it is making.
         if is_within(dst, src) {
@@ -90,7 +102,11 @@ pub(crate) fn copy_path(src: &Path, dst: &Path, recursive: bool) -> Result<(), S
     // `fs::copy` truncates the destination before reading the source, so
     // copying a file onto itself would empty it.
     if same_file(src, dst) {
-        return Err(format!("'{}' and '{}' are the same file", src.display(), dst.display()));
+        return Err(format!(
+            "'{}' and '{}' are the same file",
+            src.display(),
+            dst.display()
+        ));
     }
     fs::copy(src, dst).map(drop).map_err(failed)
 }
@@ -170,7 +186,11 @@ mod tests {
         fs::write(&b, "b").unwrap();
         fs::create_dir(&dest).unwrap();
 
-        let args = [a.to_str().unwrap(), b.to_str().unwrap(), dest.to_str().unwrap()];
+        let args = [
+            a.to_str().unwrap(),
+            b.to_str().unwrap(),
+            dest.to_str().unwrap(),
+        ];
         let out = run("cp", &args, "");
         assert_eq!(out.status, 0, "{}", out.stderr);
         assert_eq!(fs::read_to_string(dest.join("a.txt")).unwrap(), "a");
@@ -185,7 +205,11 @@ mod tests {
         fs::write(&a, "a").unwrap();
         let missing = dir.join("missing");
 
-        let args = [a.to_str().unwrap(), a.to_str().unwrap(), missing.to_str().unwrap()];
+        let args = [
+            a.to_str().unwrap(),
+            a.to_str().unwrap(),
+            missing.to_str().unwrap(),
+        ];
         let out = run("cp", &args, "");
         assert_eq!(out.status, 1);
         assert!(out.stderr.contains("is not a directory"));
@@ -206,7 +230,10 @@ mod tests {
 
         let out = run("cp", &["-r", src_arg, dst_arg], "");
         assert_eq!(out.status, 0, "{}", out.stderr);
-        assert_eq!(fs::read_to_string(dst.join("nested").join("f.txt")).unwrap(), "deep");
+        assert_eq!(
+            fs::read_to_string(dst.join("nested").join("f.txt")).unwrap(),
+            "deep"
+        );
         fs::remove_dir_all(dir).unwrap();
     }
 
@@ -218,7 +245,11 @@ mod tests {
         fs::write(src.join("f.txt"), "x").unwrap();
         let inside = src.join("sub");
 
-        let out = run("cp", &["-r", src.to_str().unwrap(), inside.to_str().unwrap()], "");
+        let out = run(
+            "cp",
+            &["-r", src.to_str().unwrap(), inside.to_str().unwrap()],
+            "",
+        );
         assert_eq!(out.status, 1);
         assert!(out.stderr.contains("into itself"));
         assert!(!inside.exists());

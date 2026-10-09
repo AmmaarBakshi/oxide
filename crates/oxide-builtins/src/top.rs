@@ -20,7 +20,14 @@ pub fn run(_args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
     });
 
     wln!(io, "=== TOP PROCESSES (CPU USAGE) ===");
-    wln!(io, "{:<10} {:<30} {:<10} {}", "PID", "NAME", "CPU%", "MEMORY(MB)");
+    wln!(
+        io,
+        "{:<10} {:<30} {:<10} {}",
+        "PID",
+        "NAME",
+        "CPU%",
+        "MEMORY(MB)"
+    );
     wln!(io, "{:-<10} {:-<30} {:-<10} {:-<10}", "", "", "", "");
 
     // Print only the top 15 processes

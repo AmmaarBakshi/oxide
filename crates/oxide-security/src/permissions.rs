@@ -9,7 +9,7 @@ impl PermissionManager {
     pub fn new() -> Self {
         let mut blocked = HashSet::new();
         blocked.insert("format".to_string()); // Never allow formatting drives!
-        
+
         Self {
             blocked_commands: blocked,
             protected_paths: vec!["C:\\Windows".to_string(), "/etc".to_string()],
@@ -26,7 +26,10 @@ impl PermissionManager {
         for arg in args {
             for protected in &self.protected_paths {
                 if arg.contains(protected) && (program == "rm" || program == "del") {
-                    return Err(format!("Security Warning: Unauthorized access to {}", protected));
+                    return Err(format!(
+                        "Security Warning: Unauthorized access to {}",
+                        protected
+                    ));
                 }
             }
         }

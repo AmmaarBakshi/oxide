@@ -64,7 +64,7 @@ impl<'a> Lexer<'a> {
                 '"' | '\'' => {
                     let quote_type = self.input.next().unwrap(); // consume the opening quote
                     let mut word = String::new();
-                    
+
                     while let Some(&next_c) = self.input.peek() {
                         if next_c == quote_type {
                             self.input.next(); // consume the closing quote

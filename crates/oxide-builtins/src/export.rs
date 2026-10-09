@@ -44,7 +44,11 @@ mod tests {
 
     #[test]
     fn sets_each_variable() {
-        let out = run("export", &["OXIDE_TEST_EXPORT_A=1", "OXIDE_TEST_EXPORT_B=two words"], "");
+        let out = run(
+            "export",
+            &["OXIDE_TEST_EXPORT_A=1", "OXIDE_TEST_EXPORT_B=two words"],
+            "",
+        );
         assert_eq!(out.status, 0, "{}", out.stderr);
         assert_eq!(std::env::var("OXIDE_TEST_EXPORT_A").unwrap(), "1");
         assert_eq!(std::env::var("OXIDE_TEST_EXPORT_B").unwrap(), "two words");
@@ -55,7 +59,11 @@ mod tests {
         for bad in ["=x", "1A=x", "A-B=x", "A\0B=x"] {
             let out = run("export", &[bad], "");
             assert_eq!(out.status, 1, "{bad:?} was accepted");
-            assert!(out.stderr.contains("not a valid identifier"), "{}", out.stderr);
+            assert!(
+                out.stderr.contains("not a valid identifier"),
+                "{}",
+                out.stderr
+            );
         }
         let out = run("export", &["OXIDE_TEST_EXPORT_NUL=a\0b"], "");
         assert_eq!(out.status, 1);

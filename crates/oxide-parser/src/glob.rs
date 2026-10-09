@@ -9,7 +9,10 @@ pub fn expand_glob(pattern: &str) -> Vec<String> {
         pattern.to_string()
     };
 
-    if normalized_pattern.contains('*') || normalized_pattern.contains('?') || normalized_pattern.contains('[') {
+    if normalized_pattern.contains('*')
+        || normalized_pattern.contains('?')
+        || normalized_pattern.contains('[')
+    {
         if let Ok(paths) = glob(&normalized_pattern) {
             for entry in paths.flatten() {
                 matches.push(entry.display().to_string().replace('\\', "/"));

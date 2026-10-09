@@ -14,7 +14,10 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
     };
 
     if dirs.is_empty() {
-        ewln!(io, "oxide: mkdir: missing operand (e.g., 'mkdir dir' or 'mkdir -p a/b/c')");
+        ewln!(
+            io,
+            "oxide: mkdir: missing operand (e.g., 'mkdir dir' or 'mkdir -p a/b/c')"
+        );
         return 1;
     }
 
@@ -61,7 +64,11 @@ mod tests {
 
         let out = run("mkdir", &["-x", target.to_str().unwrap()], "");
         assert_eq!(out.status, 1);
-        assert!(out.stderr.contains("invalid option -- 'x'"), "{}", out.stderr);
+        assert!(
+            out.stderr.contains("invalid option -- 'x'"),
+            "{}",
+            out.stderr
+        );
         assert!(!target.exists());
         std::fs::remove_dir_all(dir).unwrap();
     }

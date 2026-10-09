@@ -19,7 +19,10 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
     };
 
     let Some((dest, sources)) = operands.split_last().filter(|(_, s)| !s.is_empty()) else {
-        ewln!(io, "mv: missing destination operand (e.g., 'mv old.txt new.txt' or 'mv a b dir')");
+        ewln!(
+            io,
+            "mv: missing destination operand (e.g., 'mv old.txt new.txt' or 'mv a b dir')"
+        );
         return 1;
     };
 
@@ -54,7 +57,12 @@ fn move_path(src: &Path, dst: &Path) -> Result<(), String> {
         Ok(()) => Ok(()),
         // A rename can't cross filesystems (or drives, on Windows).
         Err(e) if e.kind() == ErrorKind::CrossesDevices => copy_then_remove(src, dst),
-        Err(e) => Err(format!("cannot move '{}' to '{}': {}", src.display(), dst.display(), e)),
+        Err(e) => Err(format!(
+            "cannot move '{}' to '{}': {}",
+            src.display(),
+            dst.display(),
+            e
+        )),
     }
 }
 
@@ -99,12 +107,19 @@ mod tests {
         fs::write(sub.join("inner.txt"), "inner").unwrap();
         fs::create_dir(&dest).unwrap();
 
-        let args = [file.to_str().unwrap(), sub.to_str().unwrap(), dest.to_str().unwrap()];
+        let args = [
+            file.to_str().unwrap(),
+            sub.to_str().unwrap(),
+            dest.to_str().unwrap(),
+        ];
         let out = run("mv", &args, "");
         assert_eq!(out.status, 0, "{}", out.stderr);
         assert!(!file.exists() && !sub.exists());
         assert_eq!(fs::read_to_string(dest.join("a.txt")).unwrap(), "a");
-        assert_eq!(fs::read_to_string(dest.join("sub").join("inner.txt")).unwrap(), "inner");
+        assert_eq!(
+            fs::read_to_string(dest.join("sub").join("inner.txt")).unwrap(),
+            "inner"
+        );
         fs::remove_dir_all(dir).unwrap();
     }
 
@@ -114,7 +129,11 @@ mod tests {
         let src = dir.join("src");
         fs::create_dir(&src).unwrap();
 
-        let out = run("mv", &[src.to_str().unwrap(), src.join("sub").to_str().unwrap()], "");
+        let out = run(
+            "mv",
+            &[src.to_str().unwrap(), src.join("sub").to_str().unwrap()],
+            "",
+        );
         assert_eq!(out.status, 1);
         assert!(out.stderr.contains("subdirectory of itself"));
         assert!(src.is_dir());
@@ -126,7 +145,11 @@ mod tests {
         let dir = scratch_dir("mv_missing");
         let (missing, dest) = (dir.join("missing.txt"), dir.join("dest.txt"));
 
-        let out = run("mv", &[missing.to_str().unwrap(), dest.to_str().unwrap()], "");
+        let out = run(
+            "mv",
+            &[missing.to_str().unwrap(), dest.to_str().unwrap()],
+            "",
+        );
         assert_eq!(out.status, 1);
         assert!(out.stderr.starts_with("mv: cannot move"));
         fs::remove_dir_all(dir).unwrap();
@@ -141,7 +164,10 @@ mod tests {
 
         copy_then_remove(&src, &dst).unwrap();
         assert!(!src.exists());
-        assert_eq!(fs::read_to_string(dst.join("nested").join("f.txt")).unwrap(), "deep");
+        assert_eq!(
+            fs::read_to_string(dst.join("nested").join("f.txt")).unwrap(),
+            "deep"
+        );
         fs::remove_dir_all(dir).unwrap();
     }
 }

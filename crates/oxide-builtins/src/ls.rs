@@ -47,7 +47,12 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
         let names = match entries(dir, show_all) {
             Ok(names) => names,
             Err(e) => {
-                ewln!(io, "oxide: ls: cannot open directory '{}': {}", dir.display(), e);
+                ewln!(
+                    io,
+                    "oxide: ls: cannot open directory '{}': {}",
+                    dir.display(),
+                    e
+                );
                 status = 1;
                 continue;
             }
@@ -95,7 +100,10 @@ mod tests {
         let arg = dir.to_str().unwrap();
 
         assert_eq!(run("ls", &[arg], "").stdout, "A.txt\nb.txt\n");
-        assert_eq!(run("ls", &["-a", arg], "").stdout, ".hidden\nA.txt\nb.txt\n");
+        assert_eq!(
+            run("ls", &["-a", arg], "").stdout,
+            ".hidden\nA.txt\nb.txt\n"
+        );
         fs::remove_dir_all(dir).unwrap();
     }
 
@@ -127,8 +135,14 @@ mod tests {
         let flag_file = dir.join("-a");
         let out = run("ls", &["--", flag_file.to_str().unwrap()], "");
         assert_eq!(out.status, 0, "{}", out.stderr);
-        assert_eq!(out.stdout, format!("{}
-", flag_file.display()));
+        assert_eq!(
+            out.stdout,
+            format!(
+                "{}
+",
+                flag_file.display()
+            )
+        );
         fs::remove_dir_all(dir).unwrap();
     }
 
@@ -138,7 +152,11 @@ mod tests {
         let (file, missing) = (dir.join("f.txt"), dir.join("missing"));
         fs::write(&file, "").unwrap();
 
-        let out = run("ls", &[missing.to_str().unwrap(), file.to_str().unwrap()], "");
+        let out = run(
+            "ls",
+            &[missing.to_str().unwrap(), file.to_str().unwrap()],
+            "",
+        );
         assert_eq!(out.status, 1);
         assert_eq!(out.stdout, format!("{}\n", file.to_str().unwrap()));
         assert!(out.stderr.contains("cannot access"));

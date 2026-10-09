@@ -1,6 +1,6 @@
 pub mod bash_mode;
-pub mod posix_mode;
 pub mod migration;
+pub mod posix_mode;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CompatMode {

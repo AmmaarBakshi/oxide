@@ -8,7 +8,10 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
     // We need at least 2 arguments: the starting path and the search term
     if args.len() < 2 {
         ewln!(io, "oxide: find: missing arguments.");
-        ewln!(io, "Usage: find <path> <search_term> (e.g., 'find . .json')");
+        ewln!(
+            io,
+            "Usage: find <path> <search_term> (e.g., 'find . .json')"
+        );
         return 1;
     }
 
@@ -16,7 +19,11 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
     let target = &args[1];
 
     if !start_path.exists() {
-        ewln!(io, "oxide: find: path '{}' does not exist", start_path.display());
+        ewln!(
+            io,
+            "oxide: find: path '{}' does not exist",
+            start_path.display()
+        );
         return 1;
     }
 
@@ -71,7 +78,10 @@ mod tests {
 
         let out = run("find", &[dir.to_str().unwrap(), ".json"], "");
         assert_eq!(out.status, 0, "{}", out.stderr);
-        assert_eq!(out.stdout.trim_end(), dir.join("sub").join("data.json").display().to_string());
+        assert_eq!(
+            out.stdout.trim_end(),
+            dir.join("sub").join("data.json").display().to_string()
+        );
         fs::remove_dir_all(dir).unwrap();
     }
 

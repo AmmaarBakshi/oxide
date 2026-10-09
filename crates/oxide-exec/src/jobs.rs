@@ -13,14 +13,17 @@ pub struct JobManager {
 
 impl JobManager {
     pub fn new() -> Self {
-        Self { jobs: Vec::new(), next_id: 1 }
+        Self {
+            jobs: Vec::new(),
+            next_id: 1,
+        }
     }
 
     pub fn add(&mut self, name: String, child: Child) {
         let id = self.next_id;
         self.next_id += 1;
         // Print the classic shell background notification: [Job ID] Process ID
-        println!("[{}] {}", id, child.id()); 
+        println!("[{}] {}", id, child.id());
         self.jobs.push(Job { id, name, child });
     }
 

@@ -20,7 +20,11 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
     let line_numbers = flags.contains('n');
 
     // Lowercased once here rather than on every line.
-    let pattern = if ignore_case { pattern.to_lowercase() } else { pattern.to_string() };
+    let pattern = if ignore_case {
+        pattern.to_lowercase()
+    } else {
+        pattern.to_string()
+    };
     let show_names = files.len() > 1;
     let mut matched = false;
 
@@ -83,9 +87,18 @@ mod tests {
 
     #[test]
     fn flags_ignore_case_invert_and_number() {
-        assert_eq!(run("grep", &["-i", "APPLE"], INPUT).stdout, "Apple pie\napple tart\n");
-        assert_eq!(run("grep", &["-v", "apple"], INPUT).stdout, "Apple pie\nbanana\n");
-        assert_eq!(run("grep", &["-in", "apple"], INPUT).stdout, "1:Apple pie\n3:apple tart\n");
+        assert_eq!(
+            run("grep", &["-i", "APPLE"], INPUT).stdout,
+            "Apple pie\napple tart\n"
+        );
+        assert_eq!(
+            run("grep", &["-v", "apple"], INPUT).stdout,
+            "Apple pie\nbanana\n"
+        );
+        assert_eq!(
+            run("grep", &["-in", "apple"], INPUT).stdout,
+            "1:Apple pie\n3:apple tart\n"
+        );
     }
 
     #[test]

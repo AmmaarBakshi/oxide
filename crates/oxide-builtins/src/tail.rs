@@ -128,13 +128,21 @@ mod tests {
 
     #[test]
     fn defaults_to_last_ten_lines() {
-        assert_eq!(run("tail", &[], TWELVE).stdout, "3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n");
+        assert_eq!(
+            run("tail", &[], TWELVE).stdout,
+            "3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n"
+        );
     }
 
     #[test]
     fn accepts_every_count_spelling() {
         for args in [&["-n", "2"][..], &["-n2"], &["-2"]] {
-            assert_eq!(run("tail", args, TWELVE).stdout, "11\n12\n", "args: {:?}", args);
+            assert_eq!(
+                run("tail", args, TWELVE).stdout,
+                "11\n12\n",
+                "args: {:?}",
+                args
+            );
         }
     }
 
@@ -159,9 +167,12 @@ mod tests {
     fn double_dash_ends_options() {
         let out = run("tail", &["-n", "2", "--", "-"], TWELVE);
         assert_eq!(out.status, 0, "{}", out.stderr);
-        assert_eq!(out.stdout, "11
+        assert_eq!(
+            out.stdout,
+            "11
 12
-");
+"
+        );
 
         let out = run("tail", &["--", "-5"], "");
         assert_eq!(out.status, 1);

@@ -5,7 +5,10 @@ use crate::{Ctx, Io};
 
 pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
     if args.is_empty() {
-        ewln!(io, "oxide: sleep: missing operand (e.g., 'sleep 5' or 'sleep 0.5')");
+        ewln!(
+            io,
+            "oxide: sleep: missing operand (e.g., 'sleep 5' or 'sleep 0.5')"
+        );
         return 1;
     }
 

@@ -18,7 +18,7 @@ fn convert_serde_to_oxide(serde_val: serde_json::Value) -> Value {
         serde_json::Value::Null => Value::Null,
         serde_json::Value::Bool(b) => Value::Bool(b),
         serde_json::Value::String(s) => Value::String(s),
-        
+
         // Serde lumps all numbers together. We need to split them into Ints and Floats
         serde_json::Value::Number(n) => {
             if let Some(i) = n.as_i64() {
@@ -26,10 +26,10 @@ fn convert_serde_to_oxide(serde_val: serde_json::Value) -> Value {
             } else if let Some(f) = n.as_f64() {
                 Value::Float(f)
             } else {
-                Value::Null 
+                Value::Null
             }
         }
-        
+
         // RECURSION: If it's a list, loop through and convert every item inside!
         serde_json::Value::Array(arr) => {
             let mut list = Vec::new();
@@ -38,7 +38,7 @@ fn convert_serde_to_oxide(serde_val: serde_json::Value) -> Value {
             }
             Value::List(list)
         }
-        
+
         // RECURSION: If it's an object, loop through and convert every key-value pair!
         serde_json::Value::Object(obj) => {
             let mut record = HashMap::new();

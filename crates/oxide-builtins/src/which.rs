@@ -70,7 +70,10 @@ fn search_path(name: &str, all: bool) -> Vec<PathBuf> {
     for dir in dirs {
         // At most one hit per directory: the executor takes the exact name
         // over `.exe`, so the other could never run from there.
-        if let Some(hit) = candidates(&dir, name).into_iter().find(|c| is_executable(c)) {
+        if let Some(hit) = candidates(&dir, name)
+            .into_iter()
+            .find(|c| is_executable(c))
+        {
             hits.push(hit);
             if !all {
                 break;
@@ -123,7 +126,9 @@ mod tests {
         assert_eq!(out.stdout, "ls: aliased to ls -a\n");
 
         let out = run_with_aliases("which", &["-a", "ls"], &aliases);
-        assert!(out.stdout.starts_with("ls: aliased to ls -a\nls: shell builtin\n"));
+        assert!(out
+            .stdout
+            .starts_with("ls: aliased to ls -a\nls: shell builtin\n"));
     }
 
     #[test]

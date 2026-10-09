@@ -2,10 +2,10 @@
 use std::collections::HashMap;
 
 pub enum ShellAction {
-    Complete,      // Tab
-    HistorySearch, // Ctrl+R
-    ClearScreen,   // Ctrl+L
-    KillLine,      // Ctrl+U
+    Complete,       // Tab
+    HistorySearch,  // Ctrl+R
+    ClearScreen,    // Ctrl+L
+    KillLine,       // Ctrl+U
     Custom(String), // Custom macros
 }
 

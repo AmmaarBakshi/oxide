@@ -23,7 +23,8 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
 
 /// `-n`, `-nn`, `-nnn`... but not a lone `-`, which is printed as text.
 fn is_dash_n(arg: &str) -> bool {
-    arg.strip_prefix('-').is_some_and(|f| !f.is_empty() && f.bytes().all(|b| b == b'n'))
+    arg.strip_prefix('-')
+        .is_some_and(|f| !f.is_empty() && f.bytes().all(|b| b == b'n'))
 }
 
 #[cfg(test)]
@@ -38,7 +39,10 @@ mod tests {
 
     #[test]
     fn dash_n_drops_the_newline() {
-        assert_eq!(run("echo", &["-n", "no", "newline"], "").stdout, "no newline");
+        assert_eq!(
+            run("echo", &["-n", "no", "newline"], "").stdout,
+            "no newline"
+        );
         assert_eq!(run("echo", &["-n"], "").stdout, "");
     }
 
@@ -48,7 +52,10 @@ mod tests {
         assert_eq!(run("echo", &["-nn", "hi"], "").stdout, "hi");
         // Only leading words count, and anything else is printed as text.
         assert_eq!(run("echo", &["-n", "a", "-n"], "").stdout, "a -n");
-        assert_eq!(run("echo", &["-nx", "-"], "").stdout, "-nx -
-");
+        assert_eq!(
+            run("echo", &["-nx", "-"], "").stdout,
+            "-nx -
+"
+        );
     }
 }

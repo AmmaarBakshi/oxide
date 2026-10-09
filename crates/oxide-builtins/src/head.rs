@@ -95,13 +95,21 @@ mod tests {
 
     #[test]
     fn defaults_to_ten_lines() {
-        assert_eq!(run("head", &[], TWELVE).stdout, "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n");
+        assert_eq!(
+            run("head", &[], TWELVE).stdout,
+            "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n"
+        );
     }
 
     #[test]
     fn accepts_every_count_spelling() {
         for args in [&["-n", "2"][..], &["-n2"], &["-2"]] {
-            assert_eq!(run("head", args, TWELVE).stdout, "1\n2\n", "args: {:?}", args);
+            assert_eq!(
+                run("head", args, TWELVE).stdout,
+                "1\n2\n",
+                "args: {:?}",
+                args
+            );
         }
     }
 
@@ -114,9 +122,12 @@ mod tests {
     fn double_dash_ends_options() {
         let out = run("head", &["-n", "2", "--", "-"], TWELVE);
         assert_eq!(out.status, 0, "{}", out.stderr);
-        assert_eq!(out.stdout, "1
+        assert_eq!(
+            out.stdout,
+            "1
 2
-");
+"
+        );
 
         let out = run("head", &["--", "-5"], "");
         assert_eq!(out.status, 1);

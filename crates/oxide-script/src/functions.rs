@@ -1,5 +1,5 @@
-use std::collections::HashMap;
-use oxide_parser::ast::Statement; // This should now resolve correctly
+use oxide_parser::ast::Statement;
+use std::collections::HashMap; // This should now resolve correctly
 
 pub struct Function {
     pub name: String,
@@ -13,7 +13,9 @@ pub struct FunctionRegistry {
 
 impl FunctionRegistry {
     pub fn new() -> Self {
-        Self { functions: HashMap::new() }
+        Self {
+            functions: HashMap::new(),
+        }
     }
 
     pub fn define(&mut self, func: Function) {

@@ -1,8 +1,8 @@
-use crate::scope::Scope;
 use crate::functions::FunctionRegistry;
-use crate::stdlib::StdLib;
 use crate::modules::ModuleManager;
-use oxide_parser::ast::{Statement, Command}; 
+use crate::scope::Scope;
+use crate::stdlib::StdLib;
+use oxide_parser::ast::{Command, Statement};
 
 pub struct Runtime {
     pub scope: Scope,
@@ -30,7 +30,12 @@ impl Runtime {
                     println!("DEBUG: Running script command: {}", cmd.program);
                     self.execute_command(cmd);
                 }
-                Statement::If { condition, body, else_if, else_body } => {
+                Statement::If {
+                    condition,
+                    body,
+                    else_if,
+                    else_body,
+                } => {
                     if self.eval_condition(&condition) {
                         self.run_script(body);
                     } else {
@@ -43,7 +48,9 @@ impl Runtime {
                             }
                         }
                         if !matched {
-                            if let Some(eb) = else_body { self.run_script(eb); }
+                            if let Some(eb) = else_body {
+                                self.run_script(eb);
+                            }
                         }
                     }
                 }
@@ -54,7 +61,9 @@ impl Runtime {
 
     fn eval_condition(&mut self, condition: &str) -> bool {
         let val = if condition.starts_with('$') {
-            self.scope.get(&condition[1..]).unwrap_or_else(|| "0".to_string())
+            self.scope
+                .get(&condition[1..])
+                .unwrap_or_else(|| "0".to_string())
         } else {
             condition.to_string()
         };
@@ -63,7 +72,7 @@ impl Runtime {
 
     // 3. Added the missing execution stub
     fn execute_command(&mut self, _cmd: Command) {
-        // Scripts pass commands back up to the Executor in a full shell, 
+        // Scripts pass commands back up to the Executor in a full shell,
         // but this stub satisfies the script engine compiler for now.
     }
 }

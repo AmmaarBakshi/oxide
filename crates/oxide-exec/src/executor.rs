@@ -182,7 +182,12 @@ impl Executor {
         match statement {
             Statement::Command(cmd) => self.run_command(cmd, env),
             Statement::Pipeline(commands) => self.run_pipeline(commands, env),
-            Statement::If { condition, body, else_if, else_body } => {
+            Statement::If {
+                condition,
+                body,
+                else_if,
+                else_body,
+            } => {
                 if self.evaluate_if_condition(condition) {
                     self.execute_statements(body, env);
                     return;
@@ -202,7 +207,11 @@ impl Executor {
                     self.execute_statements(body, env);
                 }
             }
-            Statement::For { variable, values, body } => {
+            Statement::For {
+                variable,
+                values,
+                body,
+            } => {
                 for val in values {
                     // Expand variables (e.g. $VAR) and globs (e.g. *.txt)
                     let expanded_val = oxide_parser::expand::expand_text(val);
@@ -553,7 +562,10 @@ impl Executor {
 /// `alias` and `export` take `KEY=VALUE` pairs, `unset` takes variable names,
 /// and `source` takes a path that globbing would multiply.
 fn expand_args(cmd: &Command) -> Vec<String> {
-    if matches!(cmd.program.as_str(), "source" | "alias" | "unset" | "export") {
+    if matches!(
+        cmd.program.as_str(),
+        "source" | "alias" | "unset" | "export"
+    ) {
         return cmd.args.clone();
     }
 
