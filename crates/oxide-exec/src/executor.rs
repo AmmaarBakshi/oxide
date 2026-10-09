@@ -396,13 +396,7 @@ impl Executor {
         let program_path = resolve_program_path(&cmd.program, env.command_cache);
 
         if is_background {
-            match crate::process::spawn_background(
-                &program_path,
-                &args,
-                &cmd.outfile,
-                cmd.append,
-                &cmd.infile,
-            ) {
+            match crate::process::spawn_background(&program_path, &args, cmd) {
                 Ok(child) => {
                     env.job_manager.add(cmd.program.clone(), child);
                     *env.last_exit_code = 0;
@@ -413,13 +407,7 @@ impl Executor {
                 }
             }
         } else {
-            *env.last_exit_code = crate::process::spawn_single(
-                &program_path,
-                &args,
-                &cmd.outfile,
-                cmd.append,
-                &cmd.infile,
-            );
+            *env.last_exit_code = crate::process::spawn_single(&program_path, &args, cmd);
         }
     }
 
@@ -647,15 +635,7 @@ impl Executor {
             }
 
             let program_path = resolve_program_path(&cmd.program, env.command_cache);
-            match spawn_stage(
-                &program_path,
-                &cmd.args,
-                upstream.take(),
-                is_last,
-                &cmd.outfile,
-                cmd.append,
-                &cmd.infile,
-            ) {
+            match spawn_stage(&program_path, &cmd.args, upstream.take(), is_last, cmd) {
                 Ok(mut stage) => {
                     if is_last {
                         status_from_child = true;
@@ -669,8 +649,8 @@ impl Executor {
                     }
                     spawned.push(stage);
                 }
-                Err(e) => {
-                    eprintln!("{}", e);
+                Err(message) => {
+                    crate::redirect::report(&cmd.errfile, cmd.err_append, &message);
                     *env.last_exit_code = 127;
                     break;
                 }
@@ -784,7 +764,16 @@ fn run_builtin_stage(
         }
     };
 
-    let mut stderr = std::io::stderr();
+    let mut stderr: Box<dyn Write> = match &cmd.errfile {
+        Some(path) => match crate::redirect::open_output(path, cmd.err_append) {
+            Ok(file) => Box::new(file),
+            Err(e) => {
+                eprintln!("oxide: redirection error: {}: {}", path, e);
+                return (1, Upstream::None);
+            }
+        },
+        None => Box::new(std::io::stderr()),
+    };
     let mut ctx = Ctx {
         aliases: &mut *env.aliases,
         history: env.history,
@@ -792,7 +781,7 @@ fn run_builtin_stage(
     };
 
     let code = {
-        let mut io = Io::new(&mut *reader, sink.as_writer(), &mut stderr);
+        let mut io = Io::new(&mut *reader, sink.as_writer(), &mut *stderr);
         builtin.run(args, &mut io, &mut ctx)
     };
 

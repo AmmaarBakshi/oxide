@@ -16,6 +16,7 @@ use std::process::{Child, ChildStdout, Stdio};
 use std::thread::JoinHandle;
 
 use crate::redirect;
+use oxide_parser::ast;
 
 /// What the previous pipeline stage left for the next one to read.
 pub enum Upstream {
@@ -64,14 +65,13 @@ pub struct Spawned {
 }
 
 /// Spawns one external stage of a pipeline, wiring `upstream` to its stdin.
+/// Redirects come from `cmd`; `program` is its resolved path.
 pub fn spawn_stage(
     program: &str,
     args: &[String],
     upstream: Upstream,
     is_last: bool,
-    outfile: &Option<String>,
-    append: bool,
-    infile: &Option<String>,
+    cmd: &ast::Command,
 ) -> Result<Spawned, String> {
     let mut process = std::process::Command::new(program);
     process.args(args);
@@ -87,15 +87,17 @@ pub fn spawn_stage(
         }
         Upstream::None => {
             // First stage: honor an explicit "< file" input redirect if present.
-            redirect::apply_input(&mut process, infile);
+            redirect::apply_input(&mut process, &cmd.infile);
         }
     }
 
     if is_last {
-        redirect::apply_output(&mut process, outfile, append);
+        redirect::apply_output(&mut process, &cmd.outfile, cmd.append);
     } else {
         process.stdout(Stdio::piped());
     }
+    // Any stage, not just the last, can send its stderr elsewhere.
+    redirect::apply_error(&mut process, &cmd.errfile, cmd.err_append);
 
     let mut child = process
         .spawn()

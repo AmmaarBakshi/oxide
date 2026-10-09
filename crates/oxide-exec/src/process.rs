@@ -1,4 +1,5 @@
 use crate::redirect;
+use oxide_parser::ast;
 use std::process::{Child, Command, ExitStatus};
 
 /// The shell-visible status of a finished process.
@@ -19,20 +20,19 @@ pub fn status_code(status: ExitStatus) -> i32 {
     1
 }
 
-/// Runs a single command and returns its exit code
-pub fn spawn_single(
-    program: &str,
-    args: &[String],
-    outfile: &Option<String>,
-    append: bool,
-    infile: &Option<String>,
-) -> i32 {
+/// Hooks up all of `cmd`'s redirects on `process`.
+fn apply_redirects(process: &mut Command, cmd: &ast::Command) {
+    redirect::apply_input(process, &cmd.infile);
+    redirect::apply_output(process, &cmd.outfile, cmd.append);
+    redirect::apply_error(process, &cmd.errfile, cmd.err_append);
+}
+
+/// Runs a single command and returns its exit code. The redirects come from
+/// `cmd`; `program` is its resolved path.
+pub fn spawn_single(program: &str, args: &[String], cmd: &ast::Command) -> i32 {
     let mut process = Command::new(program);
     process.args(args);
-
-    // Hook up any "< file", "> file", or ">> file" redirects
-    redirect::apply_input(&mut process, infile);
-    redirect::apply_output(&mut process, outfile, append);
+    apply_redirects(&mut process, cmd);
 
     match process.spawn() {
         Ok(mut child) => match child.wait() {
@@ -43,7 +43,8 @@ pub fn spawn_single(
             }
         },
         Err(_) => {
-            eprintln!("oxide: command not found: {}", program);
+            let message = format!("oxide: command not found: {}", program);
+            redirect::report(&cmd.errfile, cmd.err_append, &message);
             127
         }
     }
@@ -53,15 +54,11 @@ pub fn spawn_single(
 pub fn spawn_background(
     program: &str,
     args: &[String],
-    outfile: &Option<String>,
-    append: bool,
-    infile: &Option<String>,
+    cmd: &ast::Command,
 ) -> Result<Child, String> {
     let mut process = Command::new(program);
     process.args(args);
-
-    redirect::apply_input(&mut process, infile);
-    redirect::apply_output(&mut process, outfile, append);
+    apply_redirects(&mut process, cmd);
 
     process
         .spawn()
