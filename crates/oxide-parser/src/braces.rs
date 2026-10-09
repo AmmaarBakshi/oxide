@@ -1,7 +1,8 @@
 //! Brace expansion: `pre{a,b}post` becomes `preapost prebpost`.
 //!
 //! It works on a word as typed, before any other expansion, and only on
-//! braces outside quotes. A pair with no comma at its top level is left as
+//! braces outside quotes. A pair can also hold a numeric range, `{1..5}`,
+//! optionally with a step, `{0..10..5}`. A pair that is neither is left as
 //! it is, so `{}` and `{x}` stay literal, and so does `${NAME}`.
 
 /// Expands every brace pair in `word`. Several pairs multiply out, left to
@@ -79,8 +80,8 @@ fn matching(chars: &[(usize, char)], open: usize, bracket: char) -> usize {
 }
 
 /// Reads the brace pair opening at `chars[start]`: `Some` with its
-/// comma-separated alternatives, or `None` if it isn't closed or has no
-/// comma at its top level.
+/// comma-separated alternatives or range, or `None` if it isn't closed or
+/// is neither.
 fn alternatives(word: &str, chars: &[(usize, char)], start: usize) -> Option<Found> {
     let open = chars[start].0;
     let mut depth = 0;
@@ -100,16 +101,18 @@ fn alternatives(word: &str, chars: &[(usize, char)], start: usize) -> Option<Fou
             (None, '}') => {
                 depth -= 1;
                 if depth == 0 {
-                    if commas.is_empty() {
-                        return None;
-                    }
-                    let mut parts = Vec::new();
-                    let mut from = open + 1;
-                    for comma in commas {
-                        parts.push(word[from..comma].to_string());
-                        from = comma + 1;
-                    }
-                    parts.push(word[from..pos].to_string());
+                    let parts = if commas.is_empty() {
+                        range(&word[open + 1..pos])?
+                    } else {
+                        let mut parts = Vec::new();
+                        let mut from = open + 1;
+                        for comma in commas {
+                            parts.push(word[from..comma].to_string());
+                            from = comma + 1;
+                        }
+                        parts.push(word[from..pos].to_string());
+                        parts
+                    };
                     return Some(Found {
                         open,
                         close: pos,
@@ -122,6 +125,48 @@ fn alternatives(word: &str, chars: &[(usize, char)], start: usize) -> Option<Fou
         i += 1;
     }
     None
+}
+
+/// Expands `start..end` or `start..end..step` to the numbers it covers,
+/// counting down when `end` is below `start`. If either end is written with
+/// a leading zero, every number is padded to the wider of the two.
+fn range(body: &str) -> Option<Vec<String>> {
+    let mut ends = body.split("..");
+    let (from, to) = (ends.next()?, ends.next()?);
+    let step = match ends.next() {
+        Some(step) => step.parse::<i64>().ok()?.unsigned_abs().max(1),
+        None => 1,
+    };
+    if ends.next().is_some() {
+        return None;
+    }
+    let (start, end) = (from.parse::<i64>().ok()?, to.parse::<i64>().ok()?);
+
+    let padded = |s: &str| {
+        let digits = s.trim_start_matches('-');
+        digits.len() > 1 && digits.starts_with('0')
+    };
+    let width = if padded(from) || padded(to) {
+        from.len().max(to.len())
+    } else {
+        0
+    };
+
+    let count = start.abs_diff(end) / step + 1;
+    let numbers = (0..count).map(|i| {
+        let offset = (i * step) as i64;
+        let n = if start <= end {
+            start + offset
+        } else {
+            start - offset
+        };
+        if n < 0 {
+            format!("-{:0w$}", n.unsigned_abs(), w = width.saturating_sub(1))
+        } else {
+            format!("{:0w$}", n, w = width)
+        }
+    });
+    Some(numbers.collect())
 }
 
 #[cfg(test)]
@@ -143,6 +188,29 @@ mod tests {
     #[test]
     fn empty_alternatives_count() {
         assert_eq!(expand("file{,.bak}"), ["file", "file.bak"]);
+    }
+
+    #[test]
+    fn numeric_ranges_count_up_and_down() {
+        assert_eq!(expand("{1..5}"), ["1", "2", "3", "4", "5"]);
+        assert_eq!(expand("{3..1}"), ["3", "2", "1"]);
+        assert_eq!(expand("{-1..1}"), ["-1", "0", "1"]);
+        assert_eq!(expand("v{1..2}.txt"), ["v1.txt", "v2.txt"]);
+    }
+
+    #[test]
+    fn ranges_take_a_step_and_padding() {
+        assert_eq!(expand("{0..10..5}"), ["0", "5", "10"]);
+        assert_eq!(expand("{10..0..-5}"), ["10", "5", "0"]);
+        assert_eq!(expand("{1..10..4}"), ["1", "5", "9"]);
+        assert_eq!(expand("{08..11}"), ["08", "09", "10", "11"]);
+    }
+
+    #[test]
+    fn malformed_ranges_stay_literal() {
+        for word in ["{1..}", "{..2}", "{a..e}", "{1..2..3..4}", "{1...3}"] {
+            assert_eq!(expand(word), [word], "{word}");
+        }
     }
 
     #[test]

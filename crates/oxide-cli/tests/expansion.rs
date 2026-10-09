@@ -24,3 +24,12 @@ fn braces_name_several_files() {
     let oxide = Oxide::new("brace-files").args(&["-c", "touch note{1,2}.txt; ls note*"]);
     oxide.run().assert_ok("note1.txt\nnote2.txt\n");
 }
+
+#[test]
+fn numeric_ranges_drive_loops() {
+    run_c(
+        "brace-range",
+        "for i in {1..3} { echo n$i }; echo {5..1..2}",
+    )
+    .assert_ok("n1\nn2\nn3\n5 3 1\n");
+}
