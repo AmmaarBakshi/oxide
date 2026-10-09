@@ -1,6 +1,7 @@
 use anyhow::Result;
 use oxide_core::shell::Shell;
 use std::env;
+use std::io::IsTerminal;
 use std::process::ExitCode;
 
 const USAGE: &str = "\
@@ -8,6 +9,7 @@ Usage: oxide [OPTIONS] [SCRIPT]
        oxide -c COMMAND
 
 Runs SCRIPT, or starts an interactive session when no script is given.
+When standard input is not a terminal, commands are read from it instead.
 
 Options:
   -c COMMAND       Run COMMAND and exit with its status
@@ -61,7 +63,8 @@ fn main() -> Result<ExitCode> {
             return Ok(ExitCode::from(status as u8));
         }
         Action::Script(path) => Shell::new().run_script(&path)?,
-        Action::Repl => Shell::new().run_repl()?,
+        Action::Repl if std::io::stdin().is_terminal() => Shell::new().run_repl()?,
+        Action::Repl => Shell::new().run_stdin()?,
     }
 
     Ok(ExitCode::SUCCESS)

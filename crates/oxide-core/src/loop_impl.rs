@@ -1,7 +1,6 @@
 use crate::shell::Shell;
 use std::env;
-use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::Read;
 
 use rustyline::error::ReadlineError;
 
@@ -71,11 +70,25 @@ impl Shell {
     // MODE 2: FILE AUTOMATION (SCRIPT)
     // ==========================================
     pub fn run_script(&mut self, file_path: &str) -> anyhow::Result<()> {
-        let file = File::open(file_path)?;
-        let reader = BufReader::new(file);
+        let source = std::fs::read_to_string(file_path)?;
+        self.run_source(&source, true);
+        Ok(())
+    }
 
-        for line in reader.lines() {
-            let line = line?;
+    /// Runs commands piped in on stdin (`echo pwd | oxide`). Treated like a
+    /// script: no prompt is shown and nothing goes into the history file.
+    pub fn run_stdin(&mut self) -> anyhow::Result<()> {
+        // Read everything up front so no lock on stdin is held while the
+        // commands run; a builtin reading stdin would otherwise deadlock.
+        let mut source = String::new();
+        std::io::stdin().read_to_string(&mut source)?;
+        self.run_source(&source, false);
+        Ok(())
+    }
+
+    /// Runs `source` one line at a time, skipping blanks and comments.
+    fn run_source(&mut self, source: &str, record_history: bool) {
+        for line in source.lines() {
             let trimmed = line.trim();
 
             if trimmed.is_empty() || trimmed.starts_with('#') {
@@ -85,11 +98,12 @@ impl Shell {
                 break;
             }
 
-            self.state.history.push(trimmed.to_string());
-            history::append(trimmed);
+            if record_history {
+                self.state.history.push(trimmed.to_string());
+                history::append(trimmed);
+            }
             self.execute_line(trimmed);
         }
-        Ok(())
     }
 
     // ==========================================
