@@ -21,6 +21,11 @@ oxide_jail/
 *.swo
 *~
 
+# ---- Tool signal files ----
+# Empty marker files that notification hooks drop into the working
+# directory, sometimes with a whole Windows path flattened into the name.
+*notify-signals*
+
 # ---- OS cruft ----
 .DS_Store
 Thumbs.db
