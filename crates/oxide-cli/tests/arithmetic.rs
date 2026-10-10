@@ -44,3 +44,12 @@ fn an_error_fails_the_command() {
         0,
     );
 }
+
+#[test]
+fn let_assigns_and_reports_through_its_status() {
+    run_c(
+        "arith-let",
+        "let n=6*7; echo $n; let n++ n*=2; echo $n; let 0 || echo zero is false",
+    )
+    .assert_ok("42\n86\nzero is false\n");
+}

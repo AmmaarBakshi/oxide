@@ -34,6 +34,7 @@ pub mod head;
 pub mod help;
 pub mod history;
 pub mod kill;
+pub mod let_;
 pub mod ls;
 pub mod mkdir;
 pub mod mv;

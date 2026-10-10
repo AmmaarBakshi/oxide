@@ -1163,7 +1163,7 @@ fn expand_command(cmd: &Command, ctx: &mut dyn Context) -> Command {
 
     let declaration = matches!(
         program.as_str(),
-        "source" | "alias" | "unset" | "export" | "local"
+        "source" | "alias" | "unset" | "export" | "local" | "let"
     );
     for arg in &cmd.args {
         if declaration {

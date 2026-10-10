@@ -113,6 +113,7 @@ declare_builtins! {
     Help   => "help",   crate::help::run,    "list the built-in commands";
     Hist   => "history", crate::history::run, "show the command history";
     Kill   => "kill",   crate::kill::run,    "terminate a process by PID";
+    Let    => "let",    crate::let_::run,    "evaluate arithmetic, assigning variables (let x=x+1)";
     Ls     => "ls",     crate::ls::run,      "list directory contents";
     Mkdir  => "mkdir",  crate::mkdir::run,   "create directories";
     Mv     => "mv",     crate::mv::run,      "move or rename files and directories";
