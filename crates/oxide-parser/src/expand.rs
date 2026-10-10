@@ -41,6 +41,41 @@ pub trait Context {
     fn positional(&self) -> Vec<String> {
         Vec::new()
     }
+
+    /// Sets a variable, for `$((x = 1))`.
+    fn assign(&mut self, _name: &str, _value: &str) {}
+
+    /// Reports an expansion that failed, such as `$((1 / 0))`. The shell
+    /// uses this to fail the command instead of running it.
+    fn report(&mut self, message: &str) {
+        eprintln!("oxide: {}", message);
+    }
+}
+
+/// Lets arithmetic read and assign through an expansion context.
+struct ArithVars<'c>(&'c mut dyn Context);
+
+impl crate::arith::Vars for ArithVars<'_> {
+    fn get(&self, name: &str) -> Option<String> {
+        self.0.lookup(name)
+    }
+
+    fn set(&mut self, name: &str, value: i64) {
+        self.0.assign(name, &value.to_string());
+    }
+}
+
+/// Evaluates the body of a `$(( ))`. `$` expansions in it are replaced
+/// first, so `$x`, `$1` and `$(cmd)` all work alongside bare names.
+fn arithmetic(body: &str, ctx: &mut dyn Context) -> String {
+    let text = expand_string(body, ctx);
+    match crate::arith::evaluate(&text, &mut ArithVars(ctx)) {
+        Ok(value) => value.to_string(),
+        Err(e) => {
+            ctx.report(&format!("{}: {}", text.trim(), e));
+            String::new()
+        }
+    }
 }
 
 /// Expands `word` into the fields it stands for: none (`$UNSET`), one, or
@@ -311,9 +346,18 @@ fn dollar(chars: &mut Peekable<Chars<'_>>, ctx: &mut dyn Context) -> Dollar {
             Dollar::Fields(ctx.positional())
         }
         // `$(command)`: what the command writes to stdout, without the
-        // trailing newlines.
+        // trailing newlines. `$((expr))` is arithmetic instead.
         Some('(') => {
             chars.next();
+            if chars.peek() == Some(&'(') {
+                chars.next();
+                let body = substitution_body(chars);
+                // The inner `(` closed above; this is the outer one's `)`.
+                if chars.peek() == Some(&')') {
+                    chars.next();
+                }
+                return Dollar::Value(arithmetic(&body, ctx));
+            }
             let command = substitution_body(chars);
             let output = ctx.substitute(&command);
             Dollar::Value(output.trim_end_matches(['\n', '\r']).to_string())
@@ -629,6 +673,15 @@ mod tests {
         assert_eq!(expand_pattern("*.rs", &mut ctx), "*.rs");
         assert_eq!(expand_pattern("'*'.rs", &mut ctx), "[*].rs");
         assert_eq!(expand_pattern("\"a?\"b*", &mut ctx), "a[?]b*");
+    }
+
+    #[test]
+    fn arithmetic_expansion() {
+        env::set_var("OXIDE_TEST_ARITH", "6");
+        assert_eq!(string("$((1 + 2 * 3))"), "7");
+        assert_eq!(string("[$(( (1 + 2) * OXIDE_TEST_ARITH ))]"), "[18]");
+        assert_eq!(string("$(($OXIDE_TEST_ARITH / 4))"), "1");
+        assert_eq!(words("\"$((2 ** 4))\" x"), ["16 x"]);
     }
 
     #[test]

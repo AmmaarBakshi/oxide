@@ -73,6 +73,9 @@ pub struct Executor {
     /// How many loops are running around the current statement, within the
     /// current function call.
     loop_depth: usize,
+    /// Set when an expansion fails (say `$((1/0))`), so the command it
+    /// belongs to fails instead of running.
+    expansion_failed: bool,
 }
 
 /// The shell state a command runs against.
@@ -170,6 +173,15 @@ impl Context for ShellContext<'_, '_> {
     fn positional(&self) -> Vec<String> {
         self.executor.positional.clone()
     }
+
+    fn assign(&mut self, name: &str, value: &str) {
+        self.executor.set_var(name, value.to_string());
+    }
+
+    fn report(&mut self, message: &str) {
+        eprintln!("oxide: {}", message);
+        self.executor.expansion_failed = true;
+    }
 }
 
 impl Default for Executor {
@@ -193,6 +205,7 @@ impl Executor {
             frames: Vec::new(),
             unwind: None,
             loop_depth: 0,
+            expansion_failed: false,
         }
     }
 
@@ -473,13 +486,22 @@ impl Executor {
     /// statement come through here, so there is a single definition of what
     /// each command name means.
     fn run_command(&mut self, cmd: &Command, env: &mut ExecEnv<'_>) {
+        self.expansion_failed = false;
         let cmd = &expand_command(cmd, &mut self.context(env));
+        if std::mem::take(&mut self.expansion_failed) {
+            *env.last_exit_code = 1;
+            return;
+        }
         if cmd.program.is_empty() {
             // A line of bare assignments sets shell variables. Each value
             // can use the ones before it: `A=1 B=$A`.
             self.substitution_status = None;
             for assignment in &cmd.assignments {
                 let value = expand_string(&assignment.value, &mut self.context(env));
+                if std::mem::take(&mut self.expansion_failed) {
+                    *env.last_exit_code = 1;
+                    return;
+                }
                 self.set_var(&assignment.name, value);
             }
             // It succeeds, unless a `$(...)` in it ran: then it has that

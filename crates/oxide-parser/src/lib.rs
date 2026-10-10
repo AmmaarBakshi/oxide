@@ -1,3 +1,4 @@
+pub mod arith;
 pub mod ast;
 pub mod braces;
 pub mod expand;
