@@ -8,6 +8,7 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
         ewln!(io, "touch: missing file operand");
         return 1;
     }
+    let mut status = 0;
     for path in args {
         // Creates the file if it's missing; an existing one keeps its contents
         // but gets a fresh modification time, which is what build tools see.
@@ -19,10 +20,10 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
             .and_then(|file| file.set_modified(SystemTime::now()));
         if let Err(e) = result {
             ewln!(io, "touch: cannot touch '{}': {}", path, e);
-            return 1;
+            status = 1;
         }
     }
-    0
+    status
 }
 
 #[cfg(test)]
@@ -45,6 +46,18 @@ mod tests {
         assert!(new.is_file());
         assert_eq!(fs::read_to_string(&old).unwrap(), "keep");
         assert!(fs::metadata(&old).unwrap().modified().unwrap() > an_hour_ago);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_failure_does_not_stop_the_rest() {
+        let dir = scratch_dir("touch_failure");
+        let (bad, good) = (dir.join("missing").join("x.txt"), dir.join("good.txt"));
+
+        let out = run("touch", &[bad.to_str().unwrap(), good.to_str().unwrap()], "");
+        assert_eq!(out.status, 1);
+        assert!(out.stderr.starts_with("touch: cannot touch"), "{}", out.stderr);
+        assert!(good.is_file());
         fs::remove_dir_all(dir).unwrap();
     }
 }
