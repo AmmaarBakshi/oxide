@@ -128,6 +128,7 @@ enum ExecutorBuiltin {
     Return,
     Set,
     Source,
+    Wait,
 }
 
 impl ExecutorBuiltin {
@@ -146,6 +147,7 @@ impl ExecutorBuiltin {
             "return" => Self::Return,
             "set" => Self::Set,
             "source" => Self::Source,
+            "wait" => Self::Wait,
             _ => return None,
         })
     }
@@ -1029,6 +1031,33 @@ impl Executor {
                     }
                 }
                 0
+            }
+
+            ExecutorBuiltin::Wait => {
+                let jobs = &mut *env.job_manager;
+                if args.is_empty() {
+                    // Every job. The status is 0, whatever they exit with.
+                    while !jobs.jobs.is_empty() {
+                        jobs.wait_for(0);
+                    }
+                    return 0;
+                }
+                // With several, the status is the last one's.
+                let mut status = 0;
+                for spec in args {
+                    status = match jobs.find(spec) {
+                        Some(index) => jobs.wait_for(index),
+                        None if spec.starts_with('%') => {
+                            shell_error!("oxide: wait: {}: no such job", spec);
+                            127
+                        }
+                        None => {
+                            shell_error!("oxide: wait: pid {} is not a child of this shell", spec);
+                            127
+                        }
+                    };
+                }
+                status
             }
 
             ExecutorBuiltin::Source => {

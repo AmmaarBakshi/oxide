@@ -70,3 +70,39 @@ fn jobs_rejects_unknown_options() {
         2,
     );
 }
+
+#[test]
+fn wait_blocks_until_every_job_is_done() {
+    run_c(
+        "wait-all",
+        "\"$OXIDE_BIN\" -c 'sleep 1; echo one > one.txt' & \"$OXIDE_BIN\" -c 'echo two > two.txt' & wait; echo $?; cat one.txt two.txt; jobs",
+    )
+    .assert_ok("0\none\ntwo\n");
+}
+
+#[test]
+fn wait_for_one_job_gives_its_status() {
+    run_c(
+        "wait-one",
+        "\"$OXIDE_BIN\" -c 'exit 4' & pid=$!; \"$OXIDE_BIN\" -c 'exit 5' & wait %2; echo $?; wait $pid; echo $?",
+    )
+    .assert_ok("5\n4\n");
+}
+
+#[test]
+fn wait_waits_for_a_whole_background_pipeline() {
+    run_c(
+        "wait-pipeline",
+        "\"$OXIDE_BIN\" -c 'echo piped' | \"$OXIDE_BIN\" -c 'read x; echo got $x > out.txt' & wait %1; cat out.txt",
+    )
+    .assert_ok("got piped\n");
+}
+
+#[test]
+fn wait_reports_unknown_jobs() {
+    run_c("wait-unknown", "wait %3; echo $?; wait 1").assert(
+        "127\n",
+        "oxide: wait: %3: no such job\noxide: wait: pid 1 is not a child of this shell\n",
+        127,
+    );
+}

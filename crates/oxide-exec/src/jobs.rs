@@ -42,6 +42,16 @@ impl Process {
         }
     }
 
+    /// Blocks until the process exits, unless it already has.
+    fn wait(&mut self) {
+        if self.status.is_none() {
+            self.status = Some(match self.child.wait() {
+                Ok(status) => crate::process::status_code(status),
+                Err(_) => 127,
+            });
+        }
+    }
+
     /// Takes note of an exit that has already happened, without blocking.
     fn poll(&mut self) {
         if self.status.is_none() {
@@ -125,6 +135,39 @@ impl JobManager {
             processes,
         });
         id
+    }
+
+    /// Finds the job `spec` names: `%N` for job N, `%%` or `%+` for the
+    /// current job, `%-` for the previous one, or a bare process id.
+    pub fn find(&self, spec: &str) -> Option<usize> {
+        let count = self.jobs.len();
+        match spec {
+            "%" | "%%" | "%+" => count.checked_sub(1),
+            "%-" => count.checked_sub(2),
+            _ => match spec.strip_prefix('%') {
+                Some(id) => {
+                    let id: usize = id.parse().ok()?;
+                    self.jobs.iter().position(|job| job.id == id)
+                }
+                None => {
+                    let pid: u32 = spec.parse().ok()?;
+                    self.jobs
+                        .iter()
+                        .position(|job| job.processes.iter().any(|p| p.child.id() == pid))
+                }
+            },
+        }
+    }
+
+    /// Blocks until every process of the job at `index` has exited, then
+    /// takes the job out of the table and returns its status.
+    pub fn wait_for(&mut self, index: usize) -> i32 {
+        let mut job = self.jobs.remove(index);
+        job.processes.iter_mut().for_each(Process::wait);
+        match job.state() {
+            JobState::Done(code) => code,
+            _ => 0,
+        }
     }
 
     /// Brings every job's state up to date, without blocking.
@@ -231,6 +274,26 @@ mod tests {
         assert_eq!(JobState::Done(0).to_string(), "Done");
         assert_eq!(JobState::Done(2).to_string(), "Exit 2");
         assert_eq!(format!("{:<8}|", JobState::Done(0)), "Done    |");
+    }
+
+    #[test]
+    fn job_specs_name_jobs_by_number_or_position() {
+        let mut jobs = JobManager::new();
+        for id in [1, 2, 4] {
+            jobs.jobs.push(Job {
+                id,
+                name: String::new(),
+                processes: Vec::new(),
+            });
+        }
+        assert_eq!(jobs.find("%4"), Some(2));
+        assert_eq!(jobs.find("%1"), Some(0));
+        assert_eq!(jobs.find("%3"), None);
+        assert_eq!(jobs.find("%%"), Some(2));
+        assert_eq!(jobs.find("%+"), Some(2));
+        assert_eq!(jobs.find("%-"), Some(1));
+        assert_eq!(jobs.find("%x"), None);
+        assert_eq!(jobs.find("123"), None);
     }
 
     #[test]
