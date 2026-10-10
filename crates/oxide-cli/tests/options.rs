@@ -45,3 +45,16 @@ fn set_plus_e_turns_it_off_again() {
 fn bad_options_are_rejected() {
     run_c("set-bad", "set -q").assert("", "oxide: set: -q: invalid option\n", 2);
 }
+
+#[test]
+fn set_x_traces_each_command_expanded() {
+    run_c(
+        "set-x",
+        "set -x; name=\"a b\"; echo hi $name | cat; set +x; echo quiet",
+    )
+    .assert(
+        "hi a b\nquiet\n",
+        "+ name='a b'\n+ echo hi a b\n+ cat\n+ set +x\n",
+        0,
+    );
+}

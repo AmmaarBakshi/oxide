@@ -78,6 +78,8 @@ pub struct Executor {
     expansion_failed: bool,
     /// `set -e`: a command that fails, untested, ends the shell.
     errexit: bool,
+    /// `set -x`: each command is echoed to stderr, expanded, before it runs.
+    xtrace: bool,
     /// How many `if`/`while` conditions are running around the current
     /// command. A failure there is a test result, not an error.
     condition_depth: usize,
@@ -214,6 +216,7 @@ impl Executor {
             loop_depth: 0,
             expansion_failed: false,
             errexit: false,
+            xtrace: false,
             condition_depth: 0,
         }
     }
@@ -529,6 +532,9 @@ impl Executor {
                     *env.last_exit_code = 1;
                     return;
                 }
+                if self.xtrace {
+                    eprintln!("+ {}={}", assignment.name, shell_quote(&value));
+                }
                 self.set_var(&assignment.name, value);
             }
             // It succeeds, unless a `$(...)` in it ran: then it has that
@@ -541,7 +547,20 @@ impl Executor {
         // `FOO=1 cmd`: the assignments reach this one command through its
         // environment and are undone once it has run.
         let _prefix = self.prefix_env(&cmd.assignments, env);
+        self.trace(cmd);
         self.dispatch(cmd, env);
+    }
+
+    /// Under `set -x`, echoes an expanded command to stderr: `+ ls -la`.
+    fn trace(&self, cmd: &Command) {
+        if !self.xtrace {
+            return;
+        }
+        let words: Vec<String> = std::iter::once(&cmd.program)
+            .chain(&cmd.args)
+            .map(|word| shell_quote(word))
+            .collect();
+        eprintln!("+ {}", words.join(" "));
     }
 
     /// Sets the environment for `FOO=1 cmd`; see [`PrefixEnv`].
@@ -993,6 +1012,7 @@ impl Executor {
                     for flag in flags.chars() {
                         match flag {
                             'e' => self.errexit = on,
+                            'x' => self.xtrace = on,
                             _ => {
                                 eprintln!("oxide: set: -{}: invalid option", flag);
                                 return 2;
@@ -1063,6 +1083,7 @@ impl Executor {
 
             // A prefix assignment applies to its own stage only.
             let _prefix = self.prefix_env(&cmd.assignments, env);
+            self.trace(cmd);
 
             // A here-document replaces whatever the previous stage sent.
             if let Some(bytes) = crate::process::here_bytes(cmd) {
@@ -1163,6 +1184,20 @@ impl Executor {
 // ==========================================
 // HELPERS
 // ==========================================
+
+/// `word` as it would have to be typed to come back the same: bare when it
+/// is plain, in single quotes when it holds spaces or shell characters.
+fn shell_quote(word: &str) -> String {
+    let plain = !word.is_empty()
+        && word
+            .chars()
+            .all(|c| c.is_alphanumeric() || "-_./:=@%+,".contains(c));
+    if plain {
+        word.to_string()
+    } else {
+        format!("'{}'", word.replace('\'', "'\\''"))
+    }
+}
 
 /// Whether `word` matches the glob `pattern`, as a `case` arm tests it: the
 /// whole word, with `*` free to match `/` too. A malformed pattern only
@@ -1458,5 +1493,13 @@ mod tests {
         names.sort();
         assert_eq!(names, ["greet", "twice"]);
         assert_eq!(executor.functions["twice"].len(), 2);
+    }
+
+    #[test]
+    fn shell_quote_only_quotes_when_needed() {
+        assert_eq!(shell_quote("plain-word.txt"), "plain-word.txt");
+        assert_eq!(shell_quote("two words"), "'two words'");
+        assert_eq!(shell_quote(""), "''");
+        assert_eq!(shell_quote("it's"), "'it'\\''s'");
     }
 }
