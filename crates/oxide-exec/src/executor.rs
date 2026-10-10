@@ -83,9 +83,10 @@ pub struct Executor {
     /// How many `if`/`while` conditions are running around the current
     /// command. A failure there is a test result, not an error.
     condition_depth: usize,
-    /// Set while a statement ended with `&` runs: an external command or
-    /// pipeline is then left running as a job instead of waited for.
-    background: bool,
+    /// Set while a statement ended with `&` runs, to its command line: an
+    /// external command or pipeline is then left running as a job instead
+    /// of waited for.
+    background: Option<String>,
 }
 
 /// The shell state a command runs against.
@@ -222,7 +223,7 @@ impl Executor {
             errexit: false,
             xtrace: false,
             condition_depth: 0,
-            background: false,
+            background: None,
         }
     }
 
@@ -376,11 +377,12 @@ impl Executor {
             // Only an external command or a pipeline really goes into the
             // background. A builtin, a function or a block runs to the end
             // first, as there is no separate process to leave running.
-            let background = exec.background
-                && matches!(
-                    exec.statement,
-                    Statement::Command(_) | Statement::Pipeline(_)
-                );
+            let background = match &exec.statement {
+                _ if !exec.background => None,
+                Statement::Command(cmd) => Some(command_line(cmd)),
+                Statement::Pipeline(commands) => Some(pipeline_line(commands)),
+                _ => None,
+            };
             let outer = std::mem::replace(&mut self.background, background);
             self.execute_statement(&exec.statement, env);
             self.background = outer;
@@ -769,10 +771,10 @@ impl Executor {
         // The command cache turns the PATH walk into a hash lookup.
         let program_path = resolve_program_path(&cmd.program, env.command_cache);
 
-        if self.background {
+        if let Some(line) = self.background.clone() {
             match crate::process::spawn_background(&program_path, args, cmd) {
                 Ok(child) => {
-                    env.job_manager.add(command_line(cmd), vec![child]);
+                    env.job_manager.add(line, vec![child]);
                     *env.last_exit_code = 0;
                 }
                 Err(e) => {
@@ -1162,12 +1164,11 @@ impl Executor {
         // on a full pipe gets a broken-pipe error instead of hanging us.
         drop(upstream);
 
-        if self.background {
+        if let Some(line) = self.background.clone() {
             // Leave the stages running; the job table reaps them later.
             if !spawned.is_empty() {
-                let line: Vec<String> = commands.iter().map(command_line).collect();
                 let children = spawned.into_iter().map(|stage| stage.child).collect();
-                env.job_manager.add(line.join(" | "), children);
+                env.job_manager.add(line, children);
             }
             *env.last_exit_code = 0;
             return;
@@ -1205,13 +1206,19 @@ impl Executor {
 // HELPERS
 // ==========================================
 
-/// A command as `jobs` lists it: its words, separated by spaces.
+/// A command as `jobs` lists it: its words as they were typed.
 fn command_line(cmd: &Command) -> String {
     std::iter::once(&cmd.program)
         .chain(&cmd.args)
         .map(String::as_str)
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+/// A pipeline as `jobs` lists it.
+fn pipeline_line(commands: &[Command]) -> String {
+    let stages: Vec<String> = commands.iter().map(command_line).collect();
+    stages.join(" | ")
 }
 
 /// `word` as it would have to be typed to come back the same: bare when it

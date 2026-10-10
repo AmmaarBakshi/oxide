@@ -1,13 +1,79 @@
 //! Background jobs: what `cmd &` started, kept until it is reaped.
 
+use std::fmt;
 use std::process::Child;
+
+/// Where a job is in its life.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum JobState {
+    Running,
+    /// Suspended by Ctrl+Z or a stop signal, until `fg` or `bg` resumes it.
+    Stopped,
+    /// Every process has exited. The status is the last stage's.
+    Done(i32),
+}
+
+impl fmt::Display for JobState {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            JobState::Running => f.pad("Running"),
+            JobState::Stopped => f.pad("Stopped"),
+            JobState::Done(0) => f.pad("Done"),
+            JobState::Done(code) => f.pad(&format!("Exit {}", code)),
+        }
+    }
+}
+
+/// One process of a job; a pipeline has one per stage.
+pub struct Process {
+    pub child: Child,
+    /// The exit status, once the process has been reaped.
+    pub status: Option<i32>,
+    /// Whether it was last seen stopped.
+    pub stopped: bool,
+}
+
+impl Process {
+    fn new(child: Child) -> Self {
+        Self {
+            child,
+            status: None,
+            stopped: false,
+        }
+    }
+
+    /// Takes note of an exit that has already happened, without blocking.
+    fn poll(&mut self) {
+        if self.status.is_none() {
+            if let Ok(Some(status)) = self.child.try_wait() {
+                self.status = Some(crate::process::status_code(status));
+            }
+        }
+    }
+}
 
 pub struct Job {
     pub id: usize,
-    /// The command line, as `jobs` shows it.
+    /// The command line as it was typed, which `jobs` shows.
     pub name: String,
-    /// One process per pipeline stage.
-    pub children: Vec<Child>,
+    pub processes: Vec<Process>,
+}
+
+impl Job {
+    pub fn state(&self) -> JobState {
+        if self.processes.iter().all(|p| p.status.is_some()) {
+            let last = self.processes.last().and_then(|p| p.status);
+            JobState::Done(last.unwrap_or(0))
+        } else if self
+            .processes
+            .iter()
+            .all(|p| p.status.is_some() || p.stopped)
+        {
+            JobState::Stopped
+        } else {
+            JobState::Running
+        }
+    }
 }
 
 pub struct JobManager {
@@ -47,34 +113,63 @@ impl JobManager {
                 eprintln!("[{}] {}", id, pid);
             }
         }
-        self.jobs.push(Job { id, name, children });
+        let processes = children.into_iter().map(Process::new).collect();
+        self.jobs.push(Job {
+            id,
+            name,
+            processes,
+        });
         id
     }
 
-    /// Checks if any background jobs have finished and cleans them up
-    pub fn check_completed(&mut self) {
-        let interactive = self.interactive;
-        self.jobs.retain_mut(|job| {
-            // try_wait() checks each process WITHOUT freezing the shell!
-            let finished = job
-                .children
-                .iter_mut()
-                .all(|child| !matches!(child.try_wait(), Ok(None)));
-            if finished && interactive {
-                println!("\n[+] Job {} completed: {}", job.id, job.name);
-            }
-            !finished
-        });
+    /// Brings every job's state up to date, without blocking.
+    pub fn refresh(&mut self) {
+        for job in &mut self.jobs {
+            job.processes.iter_mut().for_each(Process::poll);
+        }
     }
 
+    /// Takes the jobs that have finished out of the table.
+    fn remove_done(&mut self) -> Vec<Job> {
+        let (done, rest) = std::mem::take(&mut self.jobs)
+            .into_iter()
+            .partition(|job| matches!(job.state(), JobState::Done(_)));
+        self.jobs = rest;
+        done
+    }
+
+    /// Called before each command. In an interactive session, finished
+    /// jobs are reported and forgotten; elsewhere they wait for `jobs`.
+    pub fn check_completed(&mut self) {
+        self.refresh();
+        if self.interactive {
+            for job in self.remove_done() {
+                println!("[{}] {}\t{}", job.id, job.state(), job.name);
+            }
+        }
+    }
+
+    /// `jobs`: lists every job with its state. A finished job is listed
+    /// one last time, then forgotten.
     pub fn print_jobs(&mut self) {
-        self.check_completed(); // Clean up before printing
-        if self.jobs.is_empty() {
-            println!("No active background jobs.");
-            return;
-        }
+        self.refresh();
         for job in &self.jobs {
-            println!("[{}] Running \t\t {}", job.id, job.name);
+            println!("[{}] {}\t{}", job.id, job.state(), job.name);
         }
+        self.remove_done();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn states_read_like_other_shells() {
+        assert_eq!(JobState::Running.to_string(), "Running");
+        assert_eq!(JobState::Stopped.to_string(), "Stopped");
+        assert_eq!(JobState::Done(0).to_string(), "Done");
+        assert_eq!(JobState::Done(2).to_string(), "Exit 2");
+        assert_eq!(format!("{:<8}|", JobState::Done(0)), "Done    |");
     }
 }
