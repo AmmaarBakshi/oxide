@@ -440,6 +440,9 @@ fn split_parameter(body: &str) -> (&str, &str) {
 /// - `${#NAME}`: the length of NAME's value, in characters;
 /// - `${NAME:-word}`: the word if NAME is unset or empty;
 /// - `${NAME:=word}`: the same, and NAME is set to it;
+/// - `${NAME%pattern}` / `${NAME%%pattern}`: the value without the
+///   shortest / longest suffix matching the glob pattern;
+/// - `${NAME#pattern}` / `${NAME##pattern}`: the same for a prefix;
 ///
 /// and `-` / `=` without the colon, which act only when NAME is unset.
 fn parameter(body: &str, ctx: &mut dyn Context) -> Dollar {
@@ -489,11 +492,50 @@ fn parameter(body: &str, ctx: &mut dyn Context) -> Dollar {
                 Dollar::Value(value.unwrap_or_default())
             }
         }
+        Some(c @ ('%' | '#')) if !colon => {
+            // Doubled (`%%`, `##`), the longest match goes.
+            let (longest, pattern) = match word.strip_prefix(c) {
+                Some(rest) => (true, rest),
+                None => (false, word),
+            };
+            let pattern = expand_pattern(pattern, ctx);
+            let value = value.unwrap_or_default();
+            Dollar::Value(remove_match(&value, &pattern, c == '%', longest))
+        }
         _ => {
             ctx.report(&format!("${{{}}}: bad substitution", body));
             Dollar::Value(String::new())
         }
     }
+}
+
+/// `value` without the shortest or longest suffix (or prefix) that matches
+/// the glob `pattern`; all of `value` if nothing matches.
+fn remove_match(value: &str, pattern: &str, suffix: bool, longest: bool) -> String {
+    let Ok(pattern) = glob::Pattern::new(pattern) else {
+        return value.to_string();
+    };
+    // Every place the value can be cut, shortest piece first.
+    let mut cuts: Vec<usize> = value
+        .char_indices()
+        .map(|(i, _)| i)
+        .chain(std::iter::once(value.len()))
+        .collect();
+    if suffix {
+        cuts.reverse();
+    }
+    if longest {
+        cuts.reverse();
+    }
+    for cut in cuts {
+        if suffix && pattern.matches(&value[cut..]) {
+            return value[..cut].to_string();
+        }
+        if !suffix && pattern.matches(&value[..cut]) {
+            return value[cut..].to_string();
+        }
+    }
+    value.to_string()
 }
 
 /// Reads the body of a `` `...` `` whose opening backtick is already
@@ -830,6 +872,20 @@ mod tests {
             expand_string("${UNSET:-$SET and ${ALSO:-$(cmd)}}", &mut ctx),
             "value and <cmd>"
         );
+    }
+
+    #[test]
+    fn prefixes_and_suffixes_come_off() {
+        let mut ctx = vars(&[("F", "archive.tar.gz"), ("P", "/home/me/notes.txt")]);
+        assert_eq!(expand_string("${F%.*}", &mut ctx), "archive.tar");
+        assert_eq!(expand_string("${F%%.*}", &mut ctx), "archive");
+        assert_eq!(expand_string("${F#*.}", &mut ctx), "tar.gz");
+        assert_eq!(expand_string("${F##*.}", &mut ctx), "gz");
+        assert_eq!(expand_string("${P##*/}", &mut ctx), "notes.txt");
+        assert_eq!(expand_string("${P%/*}", &mut ctx), "/home/me");
+        // No match leaves the value alone; a quoted pattern is literal.
+        assert_eq!(expand_string("${F%.zip}", &mut ctx), "archive.tar.gz");
+        assert_eq!(expand_string("${F%'*'}", &mut ctx), "archive.tar.gz");
     }
 
     #[test]

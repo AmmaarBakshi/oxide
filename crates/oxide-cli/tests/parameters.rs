@@ -44,3 +44,12 @@ fn hash_gives_the_length() {
     )
     .assert_ok("5\n2 3\n");
 }
+
+#[test]
+fn prefixes_and_suffixes_come_off() {
+    run_c(
+        "param-trim",
+        "for f in report.txt photo.jpeg { echo ${f%.*} ${f##*.} }; p=/a/b/c.rs; echo ${p%/*} ${p##*/}",
+    )
+    .assert_ok("report txt\nphoto jpeg\n/a/b c.rs\n");
+}
