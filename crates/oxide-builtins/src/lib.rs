@@ -91,7 +91,7 @@ pub struct Ctx<'a> {
 /// handles every name in this list.
 pub const EXECUTOR_BUILTINS: &[&str] = &[
     "break", "call", "continue", "exit", "import", "jail", "jobs", "local", "mode", "refresh",
-    "return", "source",
+    "return", "set", "source",
 ];
 
 /// Every name Oxide handles internally, from both tiers.

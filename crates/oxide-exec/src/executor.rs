@@ -76,6 +76,11 @@ pub struct Executor {
     /// Set when an expansion fails (say `$((1/0))`), so the command it
     /// belongs to fails instead of running.
     expansion_failed: bool,
+    /// `set -e`: a command that fails, untested, ends the shell.
+    errexit: bool,
+    /// How many `if`/`while` conditions are running around the current
+    /// command. A failure there is a test result, not an error.
+    condition_depth: usize,
 }
 
 /// The shell state a command runs against.
@@ -115,6 +120,7 @@ enum ExecutorBuiltin {
     Mode,
     Refresh,
     Return,
+    Set,
     Source,
 }
 
@@ -132,6 +138,7 @@ impl ExecutorBuiltin {
             "mode" => Self::Mode,
             "refresh" => Self::Refresh,
             "return" => Self::Return,
+            "set" => Self::Set,
             "source" => Self::Source,
             _ => return None,
         })
@@ -206,6 +213,8 @@ impl Executor {
             unwind: None,
             loop_depth: 0,
             expansion_failed: false,
+            errexit: false,
+            condition_depth: 0,
         }
     }
 
@@ -336,7 +345,7 @@ impl Executor {
 
     /// Runs a list of statements, honoring `&&` and `||` between them.
     fn execute_list(&mut self, list: &[Executable], env: &mut ExecEnv<'_>) {
-        for exec in list {
+        for (i, exec) in list.iter().enumerate() {
             if self.stopped() {
                 return;
             }
@@ -357,6 +366,22 @@ impl Executor {
             }
 
             self.execute_statement(&exec.statement, env);
+
+            // `set -e`: a failure ends the shell, unless its status is being
+            // tested, by a condition or by a `&&`/`||` that follows it.
+            if self.errexit
+                && *env.last_exit_code != 0
+                && self.condition_depth == 0
+                && !self.stopped()
+            {
+                let tested = matches!(
+                    list.get(i + 1).map(|next| &next.condition),
+                    Some(Condition::And | Condition::Or)
+                );
+                if !tested {
+                    self.exit_status = Some(*env.last_exit_code);
+                }
+            }
         }
     }
 
@@ -386,7 +411,9 @@ impl Executor {
     /// Runs a condition list and says whether it succeeded: whether its
     /// last command exited with status 0.
     fn condition_holds(&mut self, condition: &[Executable], env: &mut ExecEnv<'_>) -> bool {
+        self.condition_depth += 1;
         self.execute_list(condition, env);
+        self.condition_depth -= 1;
         !self.stopped() && *env.last_exit_code == 0
     }
 
@@ -940,6 +967,40 @@ impl Executor {
                 };
                 self.unwind = Some(Unwind::Return);
                 status
+            }
+
+            ExecutorBuiltin::Set => {
+                if args.is_empty() {
+                    // With no options, list the shell variables.
+                    let mut vars: Vec<_> = self.vars.iter().collect();
+                    vars.sort();
+                    for (name, value) in vars {
+                        println!("{}={}", name, value);
+                    }
+                    return 0;
+                }
+                for arg in args {
+                    // `-e` turns an option on, `+e` turns it off.
+                    let (on, flags) = match (arg.strip_prefix('-'), arg.strip_prefix('+')) {
+                        (Some(flags), _) | (_, Some(flags)) if !flags.is_empty() => {
+                            (arg.starts_with('-'), flags)
+                        }
+                        _ => {
+                            eprintln!("oxide: set: {}: invalid option", arg);
+                            return 2;
+                        }
+                    };
+                    for flag in flags.chars() {
+                        match flag {
+                            'e' => self.errexit = on,
+                            _ => {
+                                eprintln!("oxide: set: -{}: invalid option", flag);
+                                return 2;
+                            }
+                        }
+                    }
+                }
+                0
             }
 
             ExecutorBuiltin::Source => {
