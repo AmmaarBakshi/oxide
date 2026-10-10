@@ -186,18 +186,28 @@ impl JobManager {
         done
     }
 
-    /// Called before each command. In an interactive session, finished
-    /// jobs are reported and forgotten; elsewhere they wait for `jobs`.
-    pub fn check_completed(&mut self) {
-        self.refresh();
+    /// Called before each prompt: reports the jobs that have finished
+    /// since the last one, as `[1]+  Done                    make`, and
+    /// forgets them. Only an interactive session does this; a script's
+    /// finished jobs wait for `jobs` to list them.
+    pub fn notify(&mut self) {
         if self.interactive {
-            for (index, job) in self.jobs.iter().enumerate() {
-                if matches!(job.state(), JobState::Done(_)) {
-                    println!("{}", self.line(index, false));
-                }
+            for line in self.take_finished() {
+                println!("{}", line);
             }
-            self.remove_done();
         }
+    }
+
+    /// The report lines for jobs that have finished, which are taken out
+    /// of the table.
+    fn take_finished(&mut self) -> Vec<String> {
+        self.refresh();
+        let lines = (0..self.jobs.len())
+            .filter(|&index| matches!(self.jobs[index].state(), JobState::Done(_)))
+            .map(|index| self.line(index, false))
+            .collect();
+        self.remove_done();
+        lines
     }
 
     /// `jobs [-l | -p]`: lists every job with its state, `-l` adding its
@@ -294,6 +304,50 @@ mod tests {
         assert_eq!(jobs.find("%-"), Some(1));
         assert_eq!(jobs.find("%x"), None);
         assert_eq!(jobs.find("123"), None);
+    }
+
+    /// A child that exits with `code` straight away.
+    fn exiting(code: i32) -> Child {
+        let script = format!("exit {}", code);
+        #[cfg(windows)]
+        let mut command = std::process::Command::new("cmd");
+        #[cfg(windows)]
+        command.args(["/C", &script]);
+        #[cfg(not(windows))]
+        let mut command = std::process::Command::new("sh");
+        #[cfg(not(windows))]
+        command.args(["-c", &script]);
+        command.spawn().expect("spawn a child")
+    }
+
+    #[test]
+    fn finished_jobs_are_reported_once() {
+        let mut jobs = JobManager::new();
+        jobs.add("quick".to_string(), vec![exiting(3)]);
+        jobs.add("ok".to_string(), vec![exiting(0)]);
+
+        // Let both exit before looking, so the markers don't depend on
+        // which finished first.
+        for _ in 0..500 {
+            jobs.refresh();
+            if jobs
+                .jobs
+                .iter()
+                .all(|job| matches!(job.state(), JobState::Done(_)))
+            {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert_eq!(
+            jobs.take_finished(),
+            [
+                format!("[1]-  {:<24}quick", "Exit 3"),
+                format!("[2]+  {:<24}ok", "Done"),
+            ]
+        );
+        assert!(jobs.take_finished().is_empty());
+        assert!(jobs.jobs.is_empty());
     }
 
     #[test]

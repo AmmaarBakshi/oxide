@@ -24,7 +24,10 @@ impl Shell {
         let _ = rl.load_history(&history_path);
 
         while self.state.is_running {
-            // ... [The rest of your loop stays exactly the same!]
+            // Jobs that finished while the last command ran, or while the
+            // prompt was up, are reported before the next prompt.
+            self.state.job_manager.notify();
+
             let cwd = env::current_dir()?;
             let cwd_str = cwd.display().to_string();
 
@@ -153,9 +156,6 @@ impl Shell {
     // THE SHARED EXECUTION ENGINE
     // ==========================================
     pub fn execute_line(&mut self, input: &str) {
-        // Clean up any background jobs that finished while we were typing
-        self.state.job_manager.check_completed();
-
         let state = &mut self.state;
         state.executor.execute_line(
             input,
