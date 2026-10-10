@@ -5,11 +5,12 @@ use std::io::IsTerminal;
 use std::process::ExitCode;
 
 const USAGE: &str = "\
-Usage: oxide [OPTIONS] [SCRIPT]
-       oxide -c COMMAND
+Usage: oxide [OPTIONS] [SCRIPT [ARGS...]]
+       oxide -c COMMAND [NAME [ARGS...]]
 
 Runs SCRIPT, or starts an interactive session when no script is given.
 When standard input is not a terminal, commands are read from it instead.
+ARGS become the positional parameters $1, $2, ...; $0 is SCRIPT, or NAME.
 
 Options:
   -c COMMAND       Run COMMAND and exit with its status
@@ -22,8 +23,16 @@ Options:
 enum Action {
     Help,
     Version,
-    Command(String),
-    Script(String),
+    /// `-c COMMAND [NAME [ARGS...]]`.
+    Command {
+        command: String,
+        name: Option<String>,
+        args: Vec<String>,
+    },
+    Script {
+        path: String,
+        args: Vec<String>,
+    },
     Repl,
 }
 
@@ -33,13 +42,20 @@ fn parse_args(args: &[String]) -> Result<Action, String> {
         Some("-h" | "--help") => Ok(Action::Help),
         Some("-V" | "--version") => Ok(Action::Version),
         Some("-c") => match args.get(1) {
-            Some(command) => Ok(Action::Command(command.clone())),
+            Some(command) => Ok(Action::Command {
+                command: command.clone(),
+                name: args.get(2).cloned(),
+                args: args.iter().skip(3).cloned().collect(),
+            }),
             None => Err("option '-c' requires an argument".to_string()),
         },
         Some(flag) if flag.starts_with('-') && flag != "-" => {
             Err(format!("unknown option '{}'", flag))
         }
-        Some(script) => Ok(Action::Script(script.to_string())),
+        Some(script) => Ok(Action::Script {
+            path: script.to_string(),
+            args: args[1..].to_vec(),
+        }),
     }
 }
 
@@ -59,11 +75,19 @@ fn main() -> Result<ExitCode> {
     match action {
         Action::Help => print!("{}", USAGE),
         Action::Version => println!("oxide {}", env!("CARGO_PKG_VERSION")),
-        Action::Command(command) => {
+        Action::Command {
+            command,
+            name,
+            args,
+        } => {
+            shell.set_arguments(name, args);
             let status = shell.run_command(&command);
             return Ok(ExitCode::from(status as u8));
         }
-        Action::Script(path) => shell.run_script(&path)?,
+        Action::Script { path, args } => {
+            shell.set_arguments(Some(path.clone()), args);
+            shell.run_script(&path)?
+        }
         Action::Repl if std::io::stdin().is_terminal() => shell.run_repl()?,
         Action::Repl => shell.run_stdin()?,
     }
@@ -103,7 +127,19 @@ mod tests {
     fn dash_c_takes_the_next_argument_as_a_command() {
         assert_eq!(
             parse(&["-c", "echo hi"]),
-            Ok(Action::Command("echo hi".into()))
+            Ok(Action::Command {
+                command: "echo hi".into(),
+                name: None,
+                args: vec![]
+            })
+        );
+        assert_eq!(
+            parse(&["-c", "echo $1", "me", "a", "b"]),
+            Ok(Action::Command {
+                command: "echo $1".into(),
+                name: Some("me".into()),
+                args: vec!["a".into(), "b".into()]
+            })
         );
         assert_eq!(
             parse(&["-c"]),
@@ -112,8 +148,14 @@ mod tests {
     }
 
     #[test]
-    fn a_plain_argument_is_a_script() {
-        assert_eq!(parse(&["build.ox"]), Ok(Action::Script("build.ox".into())));
+    fn a_plain_argument_is_a_script_and_the_rest_its_arguments() {
+        assert_eq!(
+            parse(&["build.ox", "--release", "x"]),
+            Ok(Action::Script {
+                path: "build.ox".into(),
+                args: vec!["--release".into(), "x".into()]
+            })
+        );
     }
 
     #[test]

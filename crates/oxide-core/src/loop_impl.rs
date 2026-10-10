@@ -122,6 +122,15 @@ impl Shell {
     // ==========================================
     /// Runs a single command string and returns its exit status. Nothing is
     /// added to the history file.
+    /// Sets `$0` (when `name` is given) and the positional parameters `$1`,
+    /// `$2`, ... for a script or a `-c` command.
+    pub fn set_arguments(&mut self, name: Option<String>, args: Vec<String>) {
+        if let Some(name) = name {
+            self.state.executor.shell_name = name;
+        }
+        self.state.executor.positional = args;
+    }
+
     pub fn run_command(&mut self, command: &str) -> i32 {
         self.execute_line(command);
         self.state.last_exit_code

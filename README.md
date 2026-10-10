@@ -94,7 +94,7 @@ cargo build --release -p oxide-cli
 ### Command-Line Options
 ```bash
 oxide                 # start an interactive session
-oxide script.ox       # run a script file
+oxide script.ox a b   # run a script file, with $1=a and $2=b
 oxide -c 'echo hi'    # run one command and exit with its status
 echo pwd | oxide      # run commands piped in on stdin
 oxide --version       # print the version (-V)

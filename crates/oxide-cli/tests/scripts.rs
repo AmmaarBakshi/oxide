@@ -54,3 +54,24 @@ fn a_script_file_runs_the_same_way_and_leaves_history_alone() {
     oxide.run().assert_ok("a\nb\n");
     assert!(!oxide.dir().join(".oxide_history").exists());
 }
+
+#[test]
+fn script_arguments_become_positional_parameters() {
+    let oxide = Oxide::new("script-args")
+        .file(
+            "args.ox",
+            "echo $0 has $# args: $1 and $2\nfor a in \"$@\" { echo [$a] }\n",
+        )
+        .args(&["args.ox", "one", "two words"]);
+    oxide
+        .run()
+        .assert_ok("args.ox has 2 args: one and two words\n[one]\n[two words]\n");
+}
+
+#[test]
+fn dash_c_takes_a_name_and_arguments() {
+    Oxide::new("dash-c-args")
+        .args(&["-c", "echo $0: $*", "myname", "x", "y"])
+        .run()
+        .assert_ok("myname: x y\n");
+}
