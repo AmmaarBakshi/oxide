@@ -97,7 +97,8 @@ impl Parser {
                 | Token::LBrace
                 | Token::RBrace
                 | Token::Newline
-                | Token::DoubleSemi => break,
+                | Token::DoubleSemi
+                | Token::Background => break,
                 _ => self.cursor += 1,
             }
         }

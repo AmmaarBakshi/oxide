@@ -56,6 +56,7 @@ pub fn is_incomplete(input: &str) -> bool {
                 | Token::And
                 | Token::Or
                 | Token::Pipe
+                | Token::Background
         );
     }
     if open_blocks > 0 {

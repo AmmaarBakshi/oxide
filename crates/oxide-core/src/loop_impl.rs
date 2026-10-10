@@ -13,6 +13,7 @@ impl Shell {
     pub fn run_repl(&mut self) -> anyhow::Result<()> {
         // 1. Turn on the Signal Shield!
         oxide_exec::signals::init();
+        self.state.job_manager.interactive = true;
 
         // 2. Load user config (prompt + theme) and build the interactive
         //    editor (highlighting, completion, hints).

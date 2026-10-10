@@ -93,6 +93,8 @@ pub struct CaseArm {
 pub struct Executable {
     pub statement: Statement,
     pub condition: Condition,
+    /// Ended with `&`: started without waiting for it to finish.
+    pub background: bool,
 }
 
 /// Statements joined by newlines, `;`, `&&` and `||`: a block's body, an

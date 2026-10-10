@@ -36,9 +36,15 @@ impl Parser {
             let start_pos = self.cursor;
 
             if let Some(statement) = self.parse_statement() {
+                // `cmd &` runs in the background; the `&` also ends it.
+                let background = self.tokens.get(self.cursor) == Some(&Token::Background);
+                if background {
+                    self.cursor += 1;
+                }
                 executables.push(Executable {
                     statement,
                     condition: current_condition.clone(),
+                    background,
                 });
             }
 
@@ -271,6 +277,14 @@ mod tests {
             panic!("expected a case");
         };
         assert_eq!(arms.len(), 2);
+    }
+
+    #[test]
+    fn an_ampersand_backgrounds_a_statement_and_ends_it() {
+        let list = Parser::new(Lexer::new("sleep 1 & echo hi; ls | wc &").tokenize()).parse();
+        let background: Vec<_> = list.iter().map(|e| e.background).collect();
+        assert_eq!(background, [true, false, true]);
+        assert!(matches!(list[2].statement, Statement::Pipeline(_)));
     }
 
     #[test]

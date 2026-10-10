@@ -83,6 +83,9 @@ pub struct Executor {
     /// How many `if`/`while` conditions are running around the current
     /// command. A failure there is a test result, not an error.
     condition_depth: usize,
+    /// Set while a statement ended with `&` runs: an external command or
+    /// pipeline is then left running as a job instead of waited for.
+    background: bool,
 }
 
 /// The shell state a command runs against.
@@ -159,6 +162,7 @@ impl Context for ShellContext<'_, '_> {
         let positional = &self.executor.positional;
         match name {
             "?" => Some((*self.env.last_exit_code).to_string()),
+            "!" => self.env.job_manager.last_pid.map(|pid| pid.to_string()),
             "#" => Some(positional.len().to_string()),
             "@" | "*" => Some(positional.join(" ")),
             "0" => Some(self.executor.shell_name.clone()),
@@ -218,6 +222,7 @@ impl Executor {
             errexit: false,
             xtrace: false,
             condition_depth: 0,
+            background: false,
         }
     }
 
@@ -368,7 +373,17 @@ impl Executor {
                 Condition::Always => {}
             }
 
+            // Only an external command or a pipeline really goes into the
+            // background. A builtin, a function or a block runs to the end
+            // first, as there is no separate process to leave running.
+            let background = exec.background
+                && matches!(
+                    exec.statement,
+                    Statement::Command(_) | Statement::Pipeline(_)
+                );
+            let outer = std::mem::replace(&mut self.background, background);
             self.execute_statement(&exec.statement, env);
+            self.background = outer;
 
             // `set -e`: a failure ends the shell, unless its status is being
             // tested, by a condition or by a `&&`/`||` that follows it.
@@ -750,30 +765,24 @@ impl Executor {
         true
     }
 
-    fn spawn_external(&mut self, cmd: &Command, expanded_args: &[String], env: &mut ExecEnv<'_>) {
-        let is_background = expanded_args.last().map(|s| s.as_str()) == Some("&");
-        let mut args = expanded_args.to_vec();
-        if is_background {
-            args.pop();
-        }
-
+    fn spawn_external(&mut self, cmd: &Command, args: &[String], env: &mut ExecEnv<'_>) {
         // The command cache turns the PATH walk into a hash lookup.
         let program_path = resolve_program_path(&cmd.program, env.command_cache);
 
-        if is_background {
-            match crate::process::spawn_background(&program_path, &args, cmd) {
+        if self.background {
+            match crate::process::spawn_background(&program_path, args, cmd) {
                 Ok(child) => {
-                    env.job_manager.add(cmd.program.clone(), child);
+                    env.job_manager.add(command_line(cmd), vec![child]);
                     *env.last_exit_code = 0;
                 }
                 Err(e) => {
-                    eprintln!("{}", e);
+                    shell_error!("{}", e);
                     *env.last_exit_code = 127;
                 }
             }
         } else {
             *env.last_exit_code =
-                crate::process::spawn_single(&program_path, &args, cmd, env.capture.as_ref());
+                crate::process::spawn_single(&program_path, args, cmd, env.capture.as_ref());
         }
     }
 
@@ -1153,6 +1162,17 @@ impl Executor {
         // on a full pipe gets a broken-pipe error instead of hanging us.
         drop(upstream);
 
+        if self.background {
+            // Leave the stages running; the job table reaps them later.
+            if !spawned.is_empty() {
+                let line: Vec<String> = commands.iter().map(command_line).collect();
+                let children = spawned.into_iter().map(|stage| stage.child).collect();
+                env.job_manager.add(line.join(" | "), children);
+            }
+            *env.last_exit_code = 0;
+            return;
+        }
+
         // Inside `$(...)`, an external last stage's output is the result.
         if let (Some(capture), Some(stage)) = (&env.capture, spawned.last_mut()) {
             if let Some(mut output) = stage.output.take() {
@@ -1184,6 +1204,15 @@ impl Executor {
 // ==========================================
 // HELPERS
 // ==========================================
+
+/// A command as `jobs` lists it: its words, separated by spaces.
+fn command_line(cmd: &Command) -> String {
+    std::iter::once(&cmd.program)
+        .chain(&cmd.args)
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .join(" ")
+}
 
 /// `word` as it would have to be typed to come back the same: bare when it
 /// is plain, in single quotes when it holds spaces or shell characters.

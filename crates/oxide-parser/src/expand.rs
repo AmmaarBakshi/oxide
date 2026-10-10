@@ -334,10 +334,10 @@ enum Dollar {
 fn dollar(chars: &mut Peekable<Chars<'_>>, ctx: &mut dyn Context) -> Dollar {
     match chars.peek() {
         // `$?`: the exit status of the last command; `$$`: the shell's pid;
-        // `$#`: how many positional parameters; `$*`: all of them in one
-        // string; `$0`..`$9`: one of them (only one digit: `$10` is `$1`
-        // then a 0).
-        Some(&c @ ('?' | '$' | '#' | '*' | '0'..='9')) => {
+        // `$!`: the pid of the last background job; `$#`: how many
+        // positional parameters; `$*`: all of them in one string; `$0`..`$9`:
+        // one of them (only one digit: `$10` is `$1` then a 0).
+        Some(&c @ ('?' | '$' | '!' | '#' | '*' | '0'..='9')) => {
             chars.next();
             Dollar::Value(lookup(&c.to_string(), ctx))
         }
@@ -428,7 +428,7 @@ fn split_parameter(body: &str) -> (&str, &str) {
         Some(c) if c.is_ascii_digit() => body
             .find(|c: char| !c.is_ascii_digit())
             .unwrap_or(body.len()),
-        Some('?' | '$' | '#' | '@' | '*') => 1,
+        Some('?' | '$' | '!' | '#' | '@' | '*') => 1,
         _ => 0,
     };
     body.split_at(len)
