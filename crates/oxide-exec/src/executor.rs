@@ -54,6 +54,9 @@ pub struct Executor {
     pub positional: Vec<String>,
     /// `$0`: the shell's name, or the script it is running.
     pub shell_name: String,
+    /// One frame per running function call, holding what its `local`
+    /// declarations hid.
+    frames: Vec<oxide_script::scope::Frame>,
 }
 
 /// The shell state a command runs against.
@@ -87,6 +90,7 @@ enum ExecutorBuiltin {
     Import,
     Jail,
     Jobs,
+    Local,
     Mode,
     Refresh,
     Source,
@@ -100,6 +104,7 @@ impl ExecutorBuiltin {
             "import" => Self::Import,
             "jail" => Self::Jail,
             "jobs" => Self::Jobs,
+            "local" => Self::Local,
             "mode" => Self::Mode,
             "refresh" => Self::Refresh,
             "source" => Self::Source,
@@ -163,6 +168,7 @@ impl Executor {
             call_depth: 0,
             positional: Vec::new(),
             shell_name: "oxide".to_string(),
+            frames: Vec::new(),
         }
     }
 
@@ -201,7 +207,9 @@ impl Executor {
     /// Sets a variable: in the environment if it is exported there,
     /// otherwise as a shell variable.
     fn set_var(&mut self, name: &str, value: String) {
-        if std::env::var_os(name).is_some() {
+        // A shell variable (a local, say) wins over an exported one of the
+        // same name; otherwise exported names stay exported.
+        if !self.vars.contains_key(name) && std::env::var_os(name).is_some() {
             std::env::set_var(name, value);
         } else {
             self.vars.insert(name.to_string(), value);
@@ -554,7 +562,11 @@ impl Executor {
         }
         let caller_args = std::mem::replace(&mut self.positional, args.to_vec());
         self.call_depth += 1;
+        self.frames.push(oxide_script::scope::Frame::default());
         self.execute_list(body, env);
+        if let Some(frame) = self.frames.pop() {
+            frame.restore(&mut self.vars);
+        }
         self.call_depth -= 1;
         self.positional = caller_args;
         *env.last_exit_code
@@ -623,6 +635,30 @@ impl Executor {
         env: &mut ExecEnv<'_>,
     ) -> i32 {
         match kind {
+            ExecutorBuiltin::Local => {
+                let Some(frame) = self.frames.last_mut() else {
+                    eprintln!("oxide: local: can only be used in a function");
+                    return 1;
+                };
+                let mut status = 0;
+                for arg in args {
+                    let (name, value) = match arg.split_once('=') {
+                        Some((name, value)) => (name, Some(value)),
+                        None => (arg.as_str(), None),
+                    };
+                    if oxide_parser::ast::Assignment::parse(&format!("{}=", name)).is_none() {
+                        eprintln!("oxide: local: '{}': not a valid identifier", name);
+                        status = 1;
+                        continue;
+                    }
+                    frame.save(name, self.vars.get(name).cloned());
+                    // `local NAME` alone hides the outer value until set.
+                    self.vars
+                        .insert(name.to_string(), value.unwrap_or_default().to_string());
+                }
+                status
+            }
+
             ExecutorBuiltin::Mode => {
                 match args.first().map(|s| s.as_str()) {
                     None => println!("oxide: current mode is {:?}", *env.mode),
@@ -955,7 +991,10 @@ fn expand_command(cmd: &Command, ctx: &mut dyn Context) -> Command {
     let program = words.next().unwrap_or_default();
     let mut args: Vec<String> = words.collect();
 
-    let declaration = matches!(program.as_str(), "source" | "alias" | "unset" | "export");
+    let declaration = matches!(
+        program.as_str(),
+        "source" | "alias" | "unset" | "export" | "local"
+    );
     for arg in &cmd.args {
         if declaration {
             args.push(expand_string(arg, ctx));

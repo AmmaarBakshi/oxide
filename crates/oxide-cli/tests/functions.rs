@@ -87,3 +87,30 @@ fn a_call_gets_its_own_parameters_and_gives_them_back() {
 fn dollar_zero_is_the_shell() {
     run_c("fn-zero", "echo $0").assert_ok("oxide\n");
 }
+
+#[test]
+fn local_variables_vanish_when_the_function_returns() {
+    run_c(
+        "fn-local",
+        "x=global; f() { local x=inner y; y=set; echo $x $y }; f; echo $x [$y]",
+    )
+    .assert_ok("inner set\nglobal []\n");
+}
+
+#[test]
+fn locals_are_visible_to_functions_called_from_inside() {
+    run_c(
+        "fn-local-dynamic",
+        "show() { echo $v }; f() { local v=\"two words\"; show }; v=outer; f; show",
+    )
+    .assert_ok("two words\nouter\n");
+}
+
+#[test]
+fn local_outside_a_function_is_an_error() {
+    run_c("fn-local-top", "local x=1").assert(
+        "",
+        "oxide: local: can only be used in a function\n",
+        1,
+    );
+}
