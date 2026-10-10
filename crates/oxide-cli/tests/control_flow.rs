@@ -105,3 +105,48 @@ fn blocks_nest_and_span_lines() {
     )
     .assert_ok("skip-x\nfound-y\n");
 }
+
+#[test]
+fn break_leaves_the_loop() {
+    run_c(
+        "loop-break",
+        "for x in a b c d { if [ $x = c ] { break }; echo $x }; echo after",
+    )
+    .assert_ok("a\nb\nafter\n");
+}
+
+#[test]
+fn continue_skips_to_the_next_pass() {
+    run_c(
+        "loop-continue",
+        "for x in 1 2 3 4 { if [ $x = 2 ] || [ $x = 3 ] { continue }; echo $x }",
+    )
+    .assert_ok("1\n4\n");
+}
+
+#[test]
+fn break_works_in_while_true() {
+    run_c(
+        "loop-while-break",
+        "x=; while true { x=a$x; if [ $x = aaa ] { break } }; echo $x",
+    )
+    .assert_ok("aaa\n");
+}
+
+#[test]
+fn a_count_reaches_outer_loops() {
+    run_c(
+        "loop-nested",
+        "for a in 1 2 { for b in x y z { if [ $b = y ] { continue 2 }; if [ $a = 2 ] { break 2 }; echo $a$b } }; echo done",
+    )
+    .assert_ok("1x\ndone\n");
+}
+
+#[test]
+fn break_outside_a_loop_is_an_error() {
+    run_c("loop-break-top", "break; echo still here").assert(
+        "still here\n",
+        "oxide: break: only meaningful in a loop\n",
+        0,
+    );
+}

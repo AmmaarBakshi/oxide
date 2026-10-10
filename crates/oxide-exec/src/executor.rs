@@ -28,10 +28,13 @@ use oxide_security::permissions::PermissionManager;
 use crate::pipeline::{builtin_sink, spawn_stage, SharedBuf, Upstream};
 
 /// Control flow that unwinds out of whatever is running until something
-/// catches it: `return` leaves the current function.
+/// catches it: `return` leaves the current function, `break N` the N
+/// innermost loops, and `continue N` ends the current pass of the Nth.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Unwind {
     Return,
+    Break(usize),
+    Continue(usize),
 }
 
 /// How deep functions may call each other before the shell gives up, so a
@@ -64,8 +67,12 @@ pub struct Executor {
     /// One frame per running function call, holding what its `local`
     /// declarations hid.
     frames: Vec<oxide_script::scope::Frame>,
-    /// Set by `return` until the function it leaves has been left.
+    /// Set by `return`, `break` or `continue` until whatever it is leaving
+    /// has been left.
     unwind: Option<Unwind>,
+    /// How many loops are running around the current statement, within the
+    /// current function call.
+    loop_depth: usize,
 }
 
 /// The shell state a command runs against.
@@ -94,7 +101,9 @@ pub struct ExecEnv<'a> {
 /// editor; the test at the bottom of this file keeps the two in agreement.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ExecutorBuiltin {
+    Break,
     Call,
+    Continue,
     Exit,
     Import,
     Jail,
@@ -109,7 +118,9 @@ enum ExecutorBuiltin {
 impl ExecutorBuiltin {
     fn lookup(name: &str) -> Option<Self> {
         Some(match name {
+            "break" => Self::Break,
             "call" => Self::Call,
+            "continue" => Self::Continue,
             "exit" => Self::Exit,
             "import" => Self::Import,
             "jail" => Self::Jail,
@@ -181,6 +192,7 @@ impl Executor {
             shell_name: "oxide".to_string(),
             frames: Vec::new(),
             unwind: None,
+            loop_depth: 0,
         }
     }
 
@@ -304,7 +316,7 @@ impl Executor {
     }
 
     /// Whether running should stop here: the shell is exiting, or a
-    /// `return` is on its way out.
+    /// `return`, `break` or `continue` is on its way out.
     fn stopped(&self) -> bool {
         self.exit_status.is_some() || self.unwind.is_some()
     }
@@ -332,6 +344,29 @@ impl Executor {
             }
 
             self.execute_statement(&exec.statement, env);
+        }
+    }
+
+    /// After one pass of a loop body: catches a `break` or `continue` aimed
+    /// at this loop, and says whether the loop should stop.
+    fn end_of_pass(&mut self) -> bool {
+        match self.unwind {
+            Some(Unwind::Break(n)) => {
+                // `break 2` stops this loop and leaves a `break 1` for the
+                // one around it.
+                self.unwind = (n > 1).then(|| Unwind::Break(n - 1));
+                true
+            }
+            Some(Unwind::Continue(n)) if n > 1 => {
+                self.unwind = Some(Unwind::Continue(n - 1));
+                true
+            }
+            Some(Unwind::Continue(_)) => {
+                self.unwind = None;
+                false
+            }
+            Some(Unwind::Return) => true,
+            None => self.exit_status.is_some(),
         }
     }
 
@@ -378,10 +413,15 @@ impl Executor {
                 // is that of the last command the body ran, not the failed
                 // condition that ended it.
                 let mut status = 0;
+                self.loop_depth += 1;
                 while self.condition_holds(condition, env) {
                     self.execute_list(body, env);
                     status = *env.last_exit_code;
+                    if self.end_of_pass() {
+                        break;
+                    }
                 }
+                self.loop_depth -= 1;
                 if self.exit_status.is_none() {
                     *env.last_exit_code = status;
                 }
@@ -392,17 +432,21 @@ impl Executor {
                 body,
             } => {
                 *env.last_exit_code = 0;
+                // Every value is expanded (variables, globs like *.txt) before
+                // the first pass, as in other shells.
+                let mut items = Vec::new();
                 for val in values {
-                    // Expand variables (e.g. $VAR) and globs (e.g. *.txt)
-                    let fields = expand_word(val, &mut self.context(env));
-                    for final_val in fields {
-                        if self.stopped() {
-                            return;
-                        }
-                        self.set_var(variable, final_val);
-                        self.execute_list(body, env);
+                    items.extend(expand_word(val, &mut self.context(env)));
+                }
+                self.loop_depth += 1;
+                for item in items {
+                    self.set_var(variable, item);
+                    self.execute_list(body, env);
+                    if self.end_of_pass() {
+                        break;
                     }
                 }
+                self.loop_depth -= 1;
             }
         }
     }
@@ -579,6 +623,8 @@ impl Executor {
             return 1;
         }
         let caller_args = std::mem::replace(&mut self.positional, args.to_vec());
+        // A function can't break out of a loop it was called from.
+        let caller_loops = std::mem::replace(&mut self.loop_depth, 0);
         self.call_depth += 1;
         self.frames.push(oxide_script::scope::Frame::default());
         self.execute_list(body, env);
@@ -588,6 +634,7 @@ impl Executor {
             frame.restore(&mut self.vars);
         }
         self.call_depth -= 1;
+        self.loop_depth = caller_loops;
         self.positional = caller_args;
         *env.last_exit_code
     }
@@ -799,6 +846,40 @@ impl Executor {
                 let _ = stdout.flush();
                 *env.mode = CompatMode::Oxide;
                 println!("Oxide Shell refreshed. System state reset to defaults.");
+                0
+            }
+
+            ExecutorBuiltin::Break | ExecutorBuiltin::Continue => {
+                let name = if kind == ExecutorBuiltin::Break {
+                    "break"
+                } else {
+                    "continue"
+                };
+                if self.loop_depth == 0 {
+                    eprintln!("oxide: {}: only meaningful in a loop", name);
+                    return 1;
+                }
+                let count = match args {
+                    [] => 1,
+                    [n] => match n.parse::<usize>() {
+                        Ok(n) if n >= 1 => n,
+                        _ => {
+                            eprintln!("oxide: {}: {}: loop count out of range", name, n);
+                            return 1;
+                        }
+                    },
+                    _ => {
+                        eprintln!("oxide: {}: too many arguments", name);
+                        return 1;
+                    }
+                };
+                // Asking to leave more loops than there are leaves them all.
+                let count = count.min(self.loop_depth);
+                self.unwind = Some(if kind == ExecutorBuiltin::Break {
+                    Unwind::Break(count)
+                } else {
+                    Unwind::Continue(count)
+                });
                 0
             }
 
