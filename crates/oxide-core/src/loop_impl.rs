@@ -76,7 +76,7 @@ impl Shell {
     // ==========================================
     pub fn run_script(&mut self, file_path: &str) -> anyhow::Result<()> {
         let source = std::fs::read_to_string(file_path)?;
-        self.run_source(&source);
+        self.run_source(&source, Some(file_path));
         Ok(())
     }
 
@@ -87,34 +87,49 @@ impl Shell {
         // commands run; a builtin reading stdin would otherwise deadlock.
         let mut source = String::new();
         std::io::stdin().read_to_string(&mut source)?;
-        self.run_source(&source);
+        self.run_source(&source, None);
         Ok(())
     }
 
     /// Runs `source` one complete statement at a time. A statement that
     /// spans lines — a block, a quoted string, a line ending in `|` — is
     /// gathered up before it runs. Scripts don't add to the history file.
-    fn run_source(&mut self, source: &str) {
+    ///
+    /// With a `file`, errors name it and the line the statement starts on.
+    fn run_source(&mut self, source: &str, file: Option<&str>) {
         let mut pending = String::new();
-        for line in source.lines() {
+        let mut start = 0;
+        for (number, line) in source.lines().enumerate() {
             let trimmed = line.trim();
-            if pending.is_empty() && (trimmed.is_empty() || trimmed.starts_with('#')) {
-                continue;
+            if pending.is_empty() {
+                if trimmed.is_empty() || trimmed.starts_with('#') {
+                    continue;
+                }
+                start = number + 1;
             }
             pending.push_str(line);
             pending.push('\n');
             if oxide_parser::is_incomplete(&pending) {
                 continue;
             }
-            self.execute_line(&std::mem::take(&mut pending));
+            self.run_statement(&std::mem::take(&mut pending), file, start);
             if !self.state.is_running {
                 return;
             }
         }
         // Whatever is still open at the end runs as it stands.
         if !pending.is_empty() {
-            self.execute_line(&pending);
+            self.run_statement(&pending, file, start);
         }
+    }
+
+    /// Runs one statement of a script, which starts on `line` of `file`.
+    fn run_statement(&mut self, statement: &str, file: Option<&str>, line: usize) {
+        if let Some(file) = file {
+            oxide_exec::location::set(file, line);
+        }
+        self.execute_line(statement);
+        oxide_exec::location::clear();
     }
 
     // ==========================================

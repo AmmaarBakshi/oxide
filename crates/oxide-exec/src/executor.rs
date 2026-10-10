@@ -188,7 +188,7 @@ impl Context for ShellContext<'_, '_> {
     }
 
     fn report(&mut self, message: &str) {
-        eprintln!("oxide: {}", message);
+        shell_error!("oxide: {}", message);
         self.executor.expansion_failed = true;
     }
 }
@@ -643,7 +643,7 @@ impl Executor {
             Some(path) => match crate::redirect::open_output(path, cmd.err_append) {
                 Ok(file) => Box::new(file),
                 Err(e) => {
-                    eprintln!("oxide: redirection error: {}: {}", path, e);
+                    shell_error!("oxide: redirection error: {}: {}", path, e);
                     return (1, Upstream::None);
                 }
             },
@@ -786,7 +786,7 @@ impl Executor {
         match kind {
             ExecutorBuiltin::Local => {
                 let Some(frame) = self.frames.last_mut() else {
-                    eprintln!("oxide: local: can only be used in a function");
+                    shell_error!("oxide: local: can only be used in a function");
                     return 1;
                 };
                 let mut status = 0;
@@ -796,7 +796,7 @@ impl Executor {
                         None => (arg.as_str(), None),
                     };
                     if oxide_parser::ast::Assignment::parse(&format!("{}=", name)).is_none() {
-                        eprintln!("oxide: local: '{}': not a valid identifier", name);
+                        shell_error!("oxide: local: '{}': not a valid identifier", name);
                         status = 1;
                         continue;
                     }
@@ -815,7 +815,7 @@ impl Executor {
                     Some("posix") => *env.mode = CompatMode::Posix,
                     Some("oxide") => *env.mode = CompatMode::Oxide,
                     Some(other) => {
-                        eprintln!("oxide: unknown mode '{}'", other);
+                        shell_error!("oxide: unknown mode '{}'", other);
                         return 1;
                     }
                 }
@@ -829,12 +829,12 @@ impl Executor {
                     [code] => match code.parse::<i64>() {
                         Ok(n) => (n & 0xff) as i32,
                         Err(_) => {
-                            eprintln!("oxide: exit: {}: numeric argument required", code);
+                            shell_error!("oxide: exit: {}: numeric argument required", code);
                             2
                         }
                     },
                     _ => {
-                        eprintln!("oxide: exit: too many arguments");
+                        shell_error!("oxide: exit: too many arguments");
                         return 1;
                     }
                 };
@@ -884,7 +884,7 @@ impl Executor {
             ExecutorBuiltin::Call => {
                 // Usage: call math_add 10 20
                 let Some(func_name) = args.first() else {
-                    eprintln!("oxide: call: usage: call <function_name> [args...]");
+                    shell_error!("oxide: call: usage: call <function_name> [args...]");
                     return 1;
                 };
                 let func_args = args[1..].to_vec();
@@ -900,14 +900,14 @@ impl Executor {
                     println!("oxide: executing script function '{}'", func_name);
                     0
                 } else {
-                    eprintln!("oxide: call: function '{}' not found", func_name);
+                    shell_error!("oxide: call: function '{}' not found", func_name);
                     1
                 }
             }
 
             ExecutorBuiltin::Import => {
                 let Some(mod_name) = args.first() else {
-                    eprintln!("oxide: import: usage: import <module>");
+                    shell_error!("oxide: import: usage: import <module>");
                     return 1;
                 };
                 match self.runtime.modules.load_module(mod_name) {
@@ -916,7 +916,7 @@ impl Executor {
                         0
                     }
                     Err(e) => {
-                        eprintln!("oxide: import error: {}", e);
+                        shell_error!("oxide: import error: {}", e);
                         1
                     }
                 }
@@ -938,7 +938,7 @@ impl Executor {
                     "continue"
                 };
                 if self.loop_depth == 0 {
-                    eprintln!("oxide: {}: only meaningful in a loop", name);
+                    shell_error!("oxide: {}: only meaningful in a loop", name);
                     return 1;
                 }
                 let count = match args {
@@ -946,12 +946,12 @@ impl Executor {
                     [n] => match n.parse::<usize>() {
                         Ok(n) if n >= 1 => n,
                         _ => {
-                            eprintln!("oxide: {}: {}: loop count out of range", name, n);
+                            shell_error!("oxide: {}: {}: loop count out of range", name, n);
                             return 1;
                         }
                     },
                     _ => {
-                        eprintln!("oxide: {}: too many arguments", name);
+                        shell_error!("oxide: {}: too many arguments", name);
                         return 1;
                     }
                 };
@@ -967,7 +967,7 @@ impl Executor {
 
             ExecutorBuiltin::Return => {
                 if self.call_depth == 0 {
-                    eprintln!("oxide: return: can only return from a function");
+                    shell_error!("oxide: return: can only return from a function");
                     return 1;
                 }
                 let status = match args {
@@ -975,12 +975,12 @@ impl Executor {
                     [code] => match code.parse::<i64>() {
                         Ok(n) => (n & 0xff) as i32,
                         Err(_) => {
-                            eprintln!("oxide: return: {}: numeric argument required", code);
+                            shell_error!("oxide: return: {}: numeric argument required", code);
                             2
                         }
                     },
                     _ => {
-                        eprintln!("oxide: return: too many arguments");
+                        shell_error!("oxide: return: too many arguments");
                         return 1;
                     }
                 };
@@ -1005,7 +1005,7 @@ impl Executor {
                             (arg.starts_with('-'), flags)
                         }
                         _ => {
-                            eprintln!("oxide: set: {}: invalid option", arg);
+                            shell_error!("oxide: set: {}: invalid option", arg);
                             return 2;
                         }
                     };
@@ -1014,7 +1014,7 @@ impl Executor {
                             'e' => self.errexit = on,
                             'x' => self.xtrace = on,
                             _ => {
-                                eprintln!("oxide: set: -{}: invalid option", flag);
+                                shell_error!("oxide: set: -{}: invalid option", flag);
                                 return 2;
                             }
                         }
@@ -1025,7 +1025,7 @@ impl Executor {
 
             ExecutorBuiltin::Source => {
                 let Some(file) = args.first() else {
-                    eprintln!("oxide: source: usage: source <filename>");
+                    shell_error!("oxide: source: usage: source <filename>");
                     return 1;
                 };
                 match std::fs::read_to_string(file) {
@@ -1038,7 +1038,7 @@ impl Executor {
                         *env.last_exit_code
                     }
                     Err(e) => {
-                        eprintln!("oxide: source: cannot open file '{}': {}", file, e);
+                        shell_error!("oxide: source: cannot open file '{}': {}", file, e);
                         1
                     }
                 }
@@ -1109,7 +1109,7 @@ impl Executor {
             }
 
             if ExecutorBuiltin::lookup(&cmd.program).is_some() {
-                eprintln!("oxide: '{}' cannot be used in a pipeline yet", cmd.program);
+                shell_error!("oxide: '{}' cannot be used in a pipeline yet", cmd.program);
                 *env.last_exit_code = 1;
                 break;
             }
@@ -1167,7 +1167,7 @@ impl Executor {
             let code = match stage.child.wait() {
                 Ok(status) => crate::process::status_code(status),
                 Err(e) => {
-                    eprintln!("oxide: pipeline: failed to wait: {}", e);
+                    shell_error!("oxide: pipeline: failed to wait: {}", e);
                     1
                 }
             };

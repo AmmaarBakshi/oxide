@@ -75,3 +75,29 @@ fn dash_c_takes_a_name_and_arguments() {
         .run()
         .assert_ok("myname: x y\n");
 }
+
+#[test]
+fn script_errors_name_the_file_and_line() {
+    let out = Oxide::new("script-error-line")
+        .file(
+            "bad.ox",
+            "echo start\n\n# a comment\nno_such_command_a\necho middle\nno_such_command_b | sort\n",
+        )
+        .args(&["bad.ox"])
+        .run();
+    assert_eq!(out.stdout, "start\nmiddle\n");
+    assert_eq!(
+        out.stderr,
+        "oxide: bad.ox:4: command not found: no_such_command_a\n\
+         oxide: bad.ox:6: command not found: no_such_command_b\n"
+    );
+}
+
+#[test]
+fn errors_outside_a_script_have_no_location() {
+    run_stdin("stdin-error-line", "no_such_command_c\n").assert(
+        "",
+        "oxide: command not found: no_such_command_c\n",
+        127,
+    );
+}

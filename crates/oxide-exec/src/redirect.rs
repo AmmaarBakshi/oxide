@@ -46,7 +46,7 @@ impl Dest {
         match open_output(path, append) {
             Ok(file) => Dest::File(file),
             Err(e) => {
-                eprintln!("oxide: redirection error: {}: {}", path, e);
+                shell_error!("oxide: redirection error: {}: {}", path, e);
                 Dest::Inherit
             }
         }
@@ -63,7 +63,7 @@ impl Dest {
             Dest::Pipe(pipe) => pipe.try_clone().map(Dest::Pipe),
         };
         copy.unwrap_or_else(|e| {
-            eprintln!("oxide: redirection error: {}", e);
+            shell_error!("oxide: redirection error: {}", e);
             Dest::Inherit
         })
     }
@@ -115,7 +115,7 @@ pub fn apply_input(process: &mut Command, infile: &Option<String>) {
                 process.stdin(Stdio::from(file));
             }
             Err(e) => {
-                eprintln!("oxide: redirection error: {}: {}", path, e);
+                shell_error!("oxide: redirection error: {}: {}", path, e);
             }
         }
     }
@@ -124,6 +124,7 @@ pub fn apply_input(process: &mut Command, infile: &Option<String>) {
 /// Reports an error about a command where that command's stderr would go,
 /// so `missing-program 2>/dev/null` stays quiet the way it does elsewhere.
 pub fn report(errfile: &Option<String>, append: bool, message: &str) {
+    let message = crate::location::tag(message);
     if let Some(path) = errfile {
         if let Ok(mut file) = open_output(path, append) {
             let _ = writeln!(file, "{}", message);

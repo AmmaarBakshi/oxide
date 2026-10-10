@@ -53,7 +53,7 @@ pub fn spawn_single(
         None => (None, None),
         Some(Ok((reader, writer))) => (Some(reader), Some(writer)),
         Some(Err(e)) => {
-            eprintln!("oxide: {}: {}", program, e);
+            shell_error!("oxide: {}: {}", program, e);
             return 1;
         }
     };
@@ -86,7 +86,7 @@ pub fn spawn_single(
             let status = match child.wait() {
                 Ok(status) => status_code(status),
                 Err(e) => {
-                    eprintln!("oxide: {}: failed to wait: {}", program, e);
+                    shell_error!("oxide: {}: failed to wait: {}", program, e);
                     1
                 }
             };
