@@ -853,10 +853,7 @@ impl Executor {
                 status
             }
 
-            ExecutorBuiltin::Jobs => {
-                env.job_manager.print_jobs();
-                0
-            }
+            ExecutorBuiltin::Jobs => env.job_manager.print_jobs(args),
 
             ExecutorBuiltin::Jail => {
                 let Some(sub_program) = args.first() else {

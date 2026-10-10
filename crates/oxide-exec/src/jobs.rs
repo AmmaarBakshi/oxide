@@ -60,6 +60,11 @@ pub struct Job {
 }
 
 impl Job {
+    /// The id of the job's first process, which leads its process group.
+    pub fn pid(&self) -> Option<u32> {
+        self.processes.first().map(|p| p.child.id())
+    }
+
     pub fn state(&self) -> JobState {
         if self.processes.iter().all(|p| p.status.is_some()) {
             let last = self.processes.last().and_then(|p| p.status);
@@ -143,20 +148,75 @@ impl JobManager {
     pub fn check_completed(&mut self) {
         self.refresh();
         if self.interactive {
-            for job in self.remove_done() {
-                println!("[{}] {}\t{}", job.id, job.state(), job.name);
+            for (index, job) in self.jobs.iter().enumerate() {
+                if matches!(job.state(), JobState::Done(_)) {
+                    println!("{}", self.line(index, false));
+                }
             }
+            self.remove_done();
         }
     }
 
-    /// `jobs`: lists every job with its state. A finished job is listed
-    /// one last time, then forgotten.
-    pub fn print_jobs(&mut self) {
+    /// `jobs [-l | -p]`: lists every job with its state, `-l` adding its
+    /// process id and `-p` showing only that. A finished job is listed one
+    /// last time, then forgotten.
+    pub fn print_jobs(&mut self, args: &[String]) -> i32 {
+        let (mut long, mut pids) = (false, false);
+        for arg in args {
+            match arg.as_str() {
+                "-l" => long = true,
+                "-p" => pids = true,
+                _ => {
+                    eprintln!("oxide: jobs: {}: invalid option", arg);
+                    eprintln!("jobs: usage: jobs [-l | -p]");
+                    return 2;
+                }
+            }
+        }
         self.refresh();
-        for job in &self.jobs {
-            println!("[{}] {}\t{}", job.id, job.state(), job.name);
+        for (index, job) in self.jobs.iter().enumerate() {
+            if pids {
+                if let Some(pid) = job.pid() {
+                    println!("{}", pid);
+                }
+            } else {
+                println!("{}", self.line(index, long));
+            }
         }
         self.remove_done();
+        0
+    }
+
+    /// `+` for the current job, the newest, which `%+` and `%%` name; `-`
+    /// for the one before it, `%-`.
+    fn marker(&self, index: usize) -> char {
+        match self.jobs.len() - index {
+            1 => '+',
+            2 => '-',
+            _ => ' ',
+        }
+    }
+
+    /// A job as `jobs` and the notices show it, in the layout other shells
+    /// use: `[1]+  Running                 sleep 10 &`. With `long`, the
+    /// process id comes after the marker.
+    fn line(&self, index: usize, long: bool) -> String {
+        let job = &self.jobs[index];
+        let state = job.state();
+        let pid = match job.pid() {
+            Some(pid) if long => format!(" {}", pid),
+            _ => " ".to_string(),
+        };
+        let ampersand = if state == JobState::Running { " &" } else { "" };
+        format!(
+            "[{}]{}{} {:<24}{}{}",
+            job.id,
+            self.marker(index),
+            pid,
+            state,
+            job.name,
+            ampersand
+        )
     }
 }
 
@@ -171,5 +231,21 @@ mod tests {
         assert_eq!(JobState::Done(0).to_string(), "Done");
         assert_eq!(JobState::Done(2).to_string(), "Exit 2");
         assert_eq!(format!("{:<8}|", JobState::Done(0)), "Done    |");
+    }
+
+    #[test]
+    fn the_newest_job_is_current_and_the_one_before_previous() {
+        let mut jobs = JobManager::new();
+        for name in ["a", "b", "c"] {
+            jobs.jobs.push(Job {
+                id: jobs.jobs.len() + 1,
+                name: name.to_string(),
+                processes: Vec::new(),
+            });
+        }
+        let markers: Vec<char> = (0..3).map(|i| jobs.marker(i)).collect();
+        assert_eq!(markers, [' ', '-', '+']);
+        // With no processes left, a job counts as done.
+        assert_eq!(jobs.line(2, false), format!("[3]+  {:<24}c", "Done"));
     }
 }

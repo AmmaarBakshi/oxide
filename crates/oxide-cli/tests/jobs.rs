@@ -39,9 +39,34 @@ fn jobs_lists_each_job_with_its_state() {
         "\"$OXIDE_BIN\" -c 'exit 3' & \"$OXIDE_BIN\" -c 'sleep 3' >/dev/null 2>&1 & sleep 1; jobs; echo --; jobs",
     )
     .assert_ok(
-        "[1] Exit 3\t\"$OXIDE_BIN\" -c 'exit 3'\n\
-         [2] Running\t\"$OXIDE_BIN\" -c 'sleep 3'\n\
+        "[1]-  Exit 3                  \"$OXIDE_BIN\" -c 'exit 3'\n\
+         [2]+  Running                 \"$OXIDE_BIN\" -c 'sleep 3' &\n\
          --\n\
-         [2] Running\t\"$OXIDE_BIN\" -c 'sleep 3'\n",
+         [2]+  Running                 \"$OXIDE_BIN\" -c 'sleep 3' &\n",
+    );
+}
+
+#[test]
+fn jobs_dash_p_and_dash_l_show_the_process_id() {
+    let out = run_c(
+        "jobs-pids",
+        "\"$OXIDE_BIN\" -c 'sleep 2' >/dev/null 2>&1 & jobs -p; echo $!; jobs -l",
+    );
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert_eq!(lines.len(), 3, "{:?}", out);
+    assert_eq!(lines[0], lines[1]);
+    assert!(
+        lines[2].starts_with(&format!("[1]+ {} Running ", lines[0])),
+        "{:?}",
+        out
+    );
+}
+
+#[test]
+fn jobs_rejects_unknown_options() {
+    run_c("jobs-bad", "jobs -x").assert(
+        "",
+        "oxide: jobs: -x: invalid option\njobs: usage: jobs [-l | -p]\n",
+        2,
     );
 }
