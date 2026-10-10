@@ -36,6 +36,11 @@ pub trait Context {
     /// Runs `command` for a `$(...)` substitution and returns what it wrote
     /// to stdout.
     fn substitute(&mut self, command: &str) -> String;
+
+    /// The positional parameters, `$1` onwards, for `"$@"`.
+    fn positional(&self) -> Vec<String> {
+        Vec::new()
+    }
 }
 
 /// Expands `word` into the fields it stands for: none (`$UNSET`), one, or
@@ -88,6 +93,7 @@ pub fn expand_heredoc(body: &str, ctx: &mut dyn Context) -> String {
             },
             '$' => match dollar(&mut chars, ctx) {
                 Dollar::Value(text) | Dollar::Literal(text) => out.push_str(&text),
+                Dollar::Fields(params) => out.push_str(&params.join(" ")),
             },
             '`' => {
                 let command = backtick_body(&mut chars);
@@ -133,6 +139,14 @@ impl Fields {
 
     fn start(&mut self) {
         self.started = true;
+    }
+
+    /// Forgets that the current field was started, if nothing is in it
+    /// yet: `"$@"` with no parameters is no word at all, not an empty one.
+    fn unstart_if_empty(&mut self) {
+        if self.current.text.is_empty() {
+            self.started = false;
+        }
     }
 
     fn push(&mut self, c: char, quoted: bool) {
@@ -210,7 +224,10 @@ fn expand(word: &str, split: bool, ctx: &mut dyn Context) -> Vec<Field> {
             }
             '"' => {
                 in_double = !in_double;
-                out.start();
+                // The opening quote makes a word, even an empty one.
+                if in_double {
+                    out.start();
+                }
             }
             '\\' => {
                 let escapable = if in_double {
@@ -229,6 +246,21 @@ fn expand(word: &str, split: bool, ctx: &mut dyn Context) -> Vec<Field> {
             '$' => match dollar(&mut chars, ctx) {
                 Dollar::Value(value) => out.push_value(&value, in_double),
                 Dollar::Literal(text) => out.push_str(&text, in_double),
+                // `$@`: each parameter its own word, even inside quotes.
+                Dollar::Fields(params) => {
+                    if params.is_empty() && in_double {
+                        out.unstart_if_empty();
+                    }
+                    for (i, param) in params.iter().enumerate() {
+                        if i > 0 {
+                            out.end_field();
+                            if in_double {
+                                out.start();
+                            }
+                        }
+                        out.push_value(param, in_double);
+                    }
+                }
             },
             // `` `command` ``: the older spelling of `$(command)`.
             '`' => {
@@ -248,15 +280,24 @@ enum Dollar {
     Value(String),
     /// Nothing expandable, so this text stands as written.
     Literal(String),
+    /// `$@`: the positional parameters, as separate words.
+    Fields(Vec<String>),
 }
 
 /// Reads what follows a `$` (already consumed) and expands it.
 fn dollar(chars: &mut Peekable<Chars<'_>>, ctx: &mut dyn Context) -> Dollar {
     match chars.peek() {
-        // `$?`: the exit status of the last command; `$$`: the shell's pid.
-        Some(&c @ ('?' | '$')) => {
+        // `$?`: the exit status of the last command; `$$`: the shell's pid;
+        // `$#`: how many positional parameters; `$*`: all of them in one
+        // string; `$0`..`$9`: one of them (only one digit: `$10` is `$1`
+        // then a 0).
+        Some(&c @ ('?' | '$' | '#' | '*' | '0'..='9')) => {
             chars.next();
             Dollar::Value(lookup(&c.to_string(), ctx))
+        }
+        Some('@') => {
+            chars.next();
+            Dollar::Fields(ctx.positional())
         }
         // `$(command)`: what the command writes to stdout, without the
         // trailing newlines.
@@ -285,7 +326,7 @@ fn dollar(chars: &mut Peekable<Chars<'_>>, ctx: &mut dyn Context) -> Dollar {
                 Dollar::Value(lookup(&name, ctx))
             }
         }
-        Some(&c) if c.is_alphanumeric() || c == '_' => {
+        Some(&c) if c.is_alphabetic() || c == '_' => {
             let mut name = String::new();
             while let Some(&c) = chars.peek() {
                 if !(c.is_alphanumeric() || c == '_') {
@@ -523,6 +564,52 @@ mod tests {
         assert!(words("$OXIDE_TEST_BRACES{1,2}").is_empty());
         // Assignments and other single strings are not brace-expanded.
         assert_eq!(string("{1,2}"), "{1,2}");
+    }
+
+    /// Positional parameters and nothing else.
+    struct Args(Vec<&'static str>);
+
+    impl Context for Args {
+        fn lookup(&self, name: &str) -> Option<String> {
+            match name {
+                "#" => Some(self.0.len().to_string()),
+                "*" => Some(self.0.join(" ")),
+                _ => name
+                    .parse::<usize>()
+                    .ok()
+                    .and_then(|n| self.0.get(n.checked_sub(1)?))
+                    .map(|s| s.to_string()),
+            }
+        }
+
+        fn substitute(&mut self, _command: &str) -> String {
+            String::new()
+        }
+
+        fn positional(&self) -> Vec<String> {
+            self.0.iter().map(|s| s.to_string()).collect()
+        }
+    }
+
+    #[test]
+    fn positional_parameters() {
+        let mut args = Args(vec!["a b", "c"]);
+        assert_eq!(expand_word("$1-$2-$3", &mut args), ["a", "b-c-"]);
+        assert_eq!(expand_word("$#", &mut args), ["2"]);
+        assert_eq!(expand_word("${2}", &mut args), ["c"]);
+        assert_eq!(expand_word("$10", &mut args), ["a", "b0"]);
+        assert_eq!(expand_word("\"$*\"", &mut args), ["a b c"]);
+    }
+
+    #[test]
+    fn quoted_dollar_at_keeps_each_parameter_whole() {
+        let mut args = Args(vec!["a b", "c"]);
+        assert_eq!(expand_word("\"$@\"", &mut args), ["a b", "c"]);
+        assert_eq!(expand_word("\"<$@>\"", &mut args), ["<a b", "c>"]);
+        assert_eq!(expand_word("$@", &mut args), ["a", "b", "c"]);
+        let mut none = Args(vec![]);
+        assert!(expand_word("\"$@\"", &mut none).is_empty());
+        assert_eq!(expand_word("\"x$@\"", &mut none), ["x"]);
     }
 
     #[test]

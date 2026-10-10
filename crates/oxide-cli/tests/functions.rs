@@ -55,3 +55,35 @@ fn runaway_recursion_fails_cleanly() {
         out
     );
 }
+
+#[test]
+fn arguments_become_positional_parameters() {
+    run_c(
+        "fn-args",
+        "greet() { echo hello $1, you have $# args: $* }; greet Ann x y; greet",
+    )
+    .assert_ok("hello Ann, you have 3 args: Ann x y\nhello , you have 0 args:\n");
+}
+
+#[test]
+fn quoted_dollar_at_passes_arguments_on_whole() {
+    run_c(
+        "fn-at",
+        "show() { for a in \"$@\" { echo [$a] } }; wrap() { show \"$@\" }; wrap 'a b' c",
+    )
+    .assert_ok("[a b]\n[c]\n");
+}
+
+#[test]
+fn a_call_gets_its_own_parameters_and_gives_them_back() {
+    run_c(
+        "fn-nested-args",
+        "inner() { echo inner $1 }; outer() { inner x; echo outer $1 }; outer y",
+    )
+    .assert_ok("inner x\nouter y\n");
+}
+
+#[test]
+fn dollar_zero_is_the_shell() {
+    run_c("fn-zero", "echo $0").assert_ok("oxide\n");
+}

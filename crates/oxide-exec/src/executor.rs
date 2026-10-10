@@ -49,6 +49,11 @@ pub struct Executor {
     pub functions: HashMap<String, Rc<List>>,
     /// How many function calls are running, one inside the next.
     call_depth: usize,
+    /// `$1`, `$2`, ...: the arguments of the running function, or of the
+    /// script at the top level.
+    pub positional: Vec<String>,
+    /// `$0`: the shell's name, or the script it is running.
+    pub shell_name: String,
 }
 
 /// The shell state a command runs against.
@@ -112,8 +117,16 @@ struct ShellContext<'a, 'e> {
 
 impl Context for ShellContext<'_, '_> {
     fn lookup(&self, name: &str) -> Option<String> {
+        let positional = &self.executor.positional;
         match name {
             "?" => Some((*self.env.last_exit_code).to_string()),
+            "#" => Some(positional.len().to_string()),
+            "@" | "*" => Some(positional.join(" ")),
+            "0" => Some(self.executor.shell_name.clone()),
+            _ if name.bytes().all(|b| b.is_ascii_digit()) => {
+                let index = name.parse::<usize>().ok()?.checked_sub(1)?;
+                positional.get(index).cloned()
+            }
             _ => self
                 .executor
                 .vars
@@ -125,6 +138,10 @@ impl Context for ShellContext<'_, '_> {
 
     fn substitute(&mut self, command: &str) -> String {
         self.executor.capture_output(command, self.env)
+    }
+
+    fn positional(&self) -> Vec<String> {
+        self.executor.positional.clone()
     }
 }
 
@@ -144,6 +161,8 @@ impl Executor {
             substitution_status: None,
             functions: HashMap::new(),
             call_depth: 0,
+            positional: Vec::new(),
+            shell_name: "oxide".to_string(),
         }
     }
 
@@ -418,7 +437,7 @@ impl Executor {
                 send_output(cmd, &output, env);
                 code
             } else {
-                self.call_function(&cmd.program, &body, env)
+                self.call_function(&cmd.program, &cmd.args, &body, env)
             };
             return;
         }
@@ -517,8 +536,15 @@ impl Executor {
         (code, sink.finish())
     }
 
-    /// Runs a function's body in this shell and returns its status.
-    fn call_function(&mut self, name: &str, body: &List, env: &mut ExecEnv<'_>) -> i32 {
+    /// Runs a function's body in this shell, with `args` as its `$1`, `$2`,
+    /// ..., and returns its status.
+    fn call_function(
+        &mut self,
+        name: &str,
+        args: &[String],
+        body: &List,
+        env: &mut ExecEnv<'_>,
+    ) -> i32 {
         if self.call_depth >= MAX_CALL_DEPTH {
             eprintln!(
                 "oxide: {}: maximum function nesting level ({}) exceeded",
@@ -526,9 +552,11 @@ impl Executor {
             );
             return 1;
         }
+        let caller_args = std::mem::replace(&mut self.positional, args.to_vec());
         self.call_depth += 1;
         self.execute_list(body, env);
         self.call_depth -= 1;
+        self.positional = caller_args;
         *env.last_exit_code
     }
 
@@ -543,7 +571,7 @@ impl Executor {
     ) -> (i32, Vec<u8>) {
         let buf = SharedBuf::default();
         let outer = env.capture.replace(buf.clone());
-        let code = self.call_function(&cmd.program, body, env);
+        let code = self.call_function(&cmd.program, &cmd.args, body, env);
         env.capture = outer;
         (code, buf.take())
     }
