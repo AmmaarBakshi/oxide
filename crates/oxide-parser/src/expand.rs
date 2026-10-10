@@ -364,21 +364,10 @@ fn dollar(chars: &mut Peekable<Chars<'_>>, ctx: &mut dyn Context) -> Dollar {
         }
         Some('{') => {
             chars.next();
-            let mut name = String::new();
-            let mut closed = false;
-            for c in chars.by_ref() {
-                if c == '}' {
-                    closed = true;
-                    break;
-                }
-                name.push(c);
-            }
-            if !closed {
-                Dollar::Literal(format!("${{{}", name))
-            } else if name.is_empty() {
-                Dollar::Literal("${}".to_string())
-            } else {
-                Dollar::Value(lookup(&name, ctx))
+            match braced_body(chars) {
+                Err(partial) => Dollar::Literal(format!("${{{}", partial)),
+                Ok(body) if body.is_empty() => Dollar::Literal("${}".to_string()),
+                Ok(body) => parameter(&body, ctx),
             }
         }
         Some(&c) if c.is_alphabetic() || c == '_' => {
@@ -393,6 +382,107 @@ fn dollar(chars: &mut Peekable<Chars<'_>>, ctx: &mut dyn Context) -> Dollar {
             Dollar::Value(lookup(&name, ctx))
         }
         _ => Dollar::Literal("$".to_string()),
+    }
+}
+
+/// Reads the inside of a `${...}` whose `${` is already consumed, up to the
+/// `}` that balances it. Quoted text and nested `${...}` are passed over.
+/// Returns what was read as the error if the braces never close.
+fn braced_body(chars: &mut Peekable<Chars<'_>>) -> Result<String, String> {
+    let mut body = String::new();
+    let mut depth = 1;
+    let mut quote = None;
+    while let Some(c) = chars.next() {
+        match (quote, c) {
+            (Some(q), c) if c == q => quote = None,
+            (Some(_), _) => {}
+            (None, '\'' | '"') => quote = Some(c),
+            (None, '\\') => {
+                body.push(c);
+                if let Some(next) = chars.next() {
+                    body.push(next);
+                }
+                continue;
+            }
+            (None, '{') => depth += 1,
+            (None, '}') => {
+                depth -= 1;
+                if depth == 0 {
+                    return Ok(body);
+                }
+            }
+            _ => {}
+        }
+        body.push(c);
+    }
+    Err(body)
+}
+
+/// Splits a `${...}` body into the parameter's name and whatever follows
+/// it: a name, a run of digits, or one special character.
+fn split_parameter(body: &str) -> (&str, &str) {
+    let len = match body.chars().next() {
+        Some(c) if c.is_alphabetic() || c == '_' => body
+            .find(|c: char| !(c.is_alphanumeric() || c == '_'))
+            .unwrap_or(body.len()),
+        Some(c) if c.is_ascii_digit() => body
+            .find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(body.len()),
+        Some('?' | '$' | '#' | '@' | '*') => 1,
+        _ => 0,
+    };
+    body.split_at(len)
+}
+
+/// Expands the inside of a `${...}`: a parameter, optionally followed by
+/// an operator and a word.
+///
+/// - `${NAME:-word}`: the word if NAME is unset or empty;
+/// - `${NAME:=word}`: the same, and NAME is set to it;
+///
+/// and `-` / `=` without the colon, which act only when NAME is unset.
+fn parameter(body: &str, ctx: &mut dyn Context) -> Dollar {
+    let (name, rest) = split_parameter(body);
+    if name.is_empty() {
+        ctx.report(&format!("${{{}}}: bad substitution", body));
+        return Dollar::Value(String::new());
+    }
+    let value = get(name, ctx);
+    if rest.is_empty() {
+        return Dollar::Value(value.unwrap_or_default());
+    }
+
+    // With a colon the operator also treats an empty value as missing.
+    let (colon, op_rest) = match rest.strip_prefix(':') {
+        Some(after) => (true, after),
+        None => (false, rest),
+    };
+    let missing = match &value {
+        None => true,
+        Some(v) => colon && v.is_empty(),
+    };
+    let mut op = op_rest.chars();
+    let operator = op.next();
+    let word = op.as_str();
+    match operator {
+        Some('-') => Dollar::Value(if missing {
+            expand_string(word, ctx)
+        } else {
+            value.unwrap_or_default()
+        }),
+        Some('=') => {
+            if missing {
+                let default = expand_string(word, ctx);
+                ctx.assign(name, &default);
+                Dollar::Value(default)
+            } else {
+                Dollar::Value(value.unwrap_or_default())
+            }
+        }
+        _ => {
+            ctx.report(&format!("${{{}}}: bad substitution", body));
+            Dollar::Value(String::new())
+        }
     }
 }
 
@@ -487,12 +577,17 @@ fn double_quoted_body(chars: &mut Peekable<Chars<'_>>, body: &mut String) {
 
 /// A variable's value; unset reads as empty.
 fn lookup(name: &str, ctx: &dyn Context) -> String {
+    get(name, ctx).unwrap_or_default()
+}
+
+/// A variable's value, or `None` when it is unset.
+fn get(name: &str, ctx: &dyn Context) -> Option<String> {
     if name == "$" {
         // Every command runs inside this one process, subshells included,
         // so its id is the shell's id everywhere.
-        return std::process::id().to_string();
+        return Some(std::process::id().to_string());
     }
-    ctx.lookup(name).unwrap_or_default()
+    ctx.lookup(name)
 }
 
 fn home() -> String {
@@ -506,8 +601,35 @@ fn home() -> String {
 mod tests {
     use super::*;
 
-    /// The environment plus a fixed `$?`.
+    /// The environment plus a fixed `$?`, and assignments kept to itself.
     struct Status(i32);
+
+    /// Shell variables for the parameter-expansion tests.
+    #[derive(Default)]
+    struct Vars(std::collections::HashMap<String, String>);
+
+    impl Context for Vars {
+        fn lookup(&self, name: &str) -> Option<String> {
+            self.0.get(name).cloned()
+        }
+
+        fn substitute(&mut self, command: &str) -> String {
+            format!("<{}>", command)
+        }
+
+        fn assign(&mut self, name: &str, value: &str) {
+            self.0.insert(name.to_string(), value.to_string());
+        }
+    }
+
+    fn vars(pairs: &[(&str, &str)]) -> Vars {
+        Vars(
+            pairs
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+        )
+    }
 
     impl Context for Status {
         fn lookup(&self, name: &str) -> Option<String> {
@@ -682,6 +804,32 @@ mod tests {
         assert_eq!(string("[$(( (1 + 2) * OXIDE_TEST_ARITH ))]"), "[18]");
         assert_eq!(string("$(($OXIDE_TEST_ARITH / 4))"), "1");
         assert_eq!(words("\"$((2 ** 4))\" x"), ["16 x"]);
+    }
+
+    #[test]
+    fn defaults_stand_in_for_missing_values() {
+        let mut ctx = vars(&[("SET", "value"), ("EMPTY", "")]);
+        assert_eq!(expand_string("${SET:-other}", &mut ctx), "value");
+        assert_eq!(expand_string("${EMPTY:-other}", &mut ctx), "other");
+        assert_eq!(expand_string("${UNSET:-other}", &mut ctx), "other");
+        // Without the colon an empty value counts as set.
+        assert_eq!(expand_string("${EMPTY-other}", &mut ctx), "");
+        assert_eq!(expand_string("${UNSET-other}", &mut ctx), "other");
+        // The default is expanded, and may nest.
+        assert_eq!(
+            expand_string("${UNSET:-$SET and ${ALSO:-$(cmd)}}", &mut ctx),
+            "value and <cmd>"
+        );
+    }
+
+    #[test]
+    fn assigning_defaults_set_the_variable() {
+        let mut ctx = vars(&[("EMPTY", "")]);
+        assert_eq!(expand_string("${EMPTY:=filled}", &mut ctx), "filled");
+        assert_eq!(expand_string("${NEW=made}", &mut ctx), "made");
+        assert_eq!(ctx.0.get("EMPTY").map(String::as_str), Some("filled"));
+        assert_eq!(ctx.0.get("NEW").map(String::as_str), Some("made"));
+        assert_eq!(expand_string("${NEW:=again}", &mut ctx), "made");
     }
 
     #[test]

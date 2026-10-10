@@ -304,10 +304,19 @@ impl<'a> Lexer<'a> {
                     self.input.next();
                     match self.input.peek() {
                         Some('{') => {
+                            // Count braces so `${X:-${Y}}` stays one piece.
+                            let mut depth = 0;
                             for b in self.input.by_ref() {
                                 word.push(b);
-                                if b == '}' {
-                                    break;
+                                match b {
+                                    '{' => depth += 1,
+                                    '}' => {
+                                        depth -= 1;
+                                        if depth == 0 {
+                                            break;
+                                        }
+                                    }
+                                    _ => {}
                                 }
                             }
                         }
