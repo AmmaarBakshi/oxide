@@ -14,10 +14,11 @@
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::io::{Read, Write};
+use std::rc::Rc;
 
 use oxide_builtins::{Ctx, Io};
 use oxide_compat::CompatMode;
-use oxide_parser::ast::{Assignment, Command, Condition, Executable, HereInput, Statement};
+use oxide_parser::ast::{Assignment, Command, Condition, Executable, HereInput, List, Statement};
 use oxide_parser::expand::{expand_heredoc, expand_string, expand_word, Context};
 use oxide_parser::lexer::Lexer;
 use oxide_parser::parser::Parser;
@@ -38,6 +39,10 @@ pub struct Executor {
     /// The status of the last `$(...)` that ran, for an assignment that
     /// holds one: `X=$(cmd)` has the status of `cmd`.
     substitution_status: Option<i32>,
+    /// Functions defined so far, by name. Shared, so a function can be
+    /// redefined while it is running without pulling its body out from
+    /// under it.
+    pub functions: HashMap<String, Rc<List>>,
 }
 
 /// The shell state a command runs against.
@@ -131,6 +136,7 @@ impl Executor {
             exit_status: None,
             vars: HashMap::new(),
             substitution_status: None,
+            functions: HashMap::new(),
         }
     }
 
@@ -288,6 +294,10 @@ impl Executor {
         match statement {
             Statement::Command(cmd) => self.run_command(cmd, env),
             Statement::Pipeline(commands) => self.run_pipeline(commands, env),
+            Statement::Function { name, body } => {
+                self.functions.insert(name.clone(), Rc::new(body.clone()));
+                *env.last_exit_code = 0;
+            }
             Statement::If {
                 condition,
                 body,
@@ -1064,5 +1074,15 @@ mod tests {
         let (executor, _) = run(&["for OXIDE_EXEC_LOOP in a b c { LAST=$OXIDE_EXEC_LOOP }"]);
         assert_eq!(var(&executor, "LAST"), Some("c"));
         assert!(std::env::var_os("OXIDE_EXEC_LOOP").is_none());
+    }
+
+    #[test]
+    fn a_definition_stores_the_function() {
+        let (executor, status) = run(&["greet() { echo hi }", "function twice { a; b }"]);
+        assert_eq!(status, 0);
+        let mut names: Vec<_> = executor.functions.keys().cloned().collect();
+        names.sort();
+        assert_eq!(names, ["greet", "twice"]);
+        assert_eq!(executor.functions["twice"].len(), 2);
     }
 }

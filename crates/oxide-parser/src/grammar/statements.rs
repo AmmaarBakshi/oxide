@@ -77,6 +77,46 @@ impl Parser {
         })
     }
 
+    /// Whether the statement here defines a function: `name() {` or
+    /// `name () {`, with the body's brace on this line or the next.
+    pub(crate) fn at_function_definition(&self) -> bool {
+        let mut ahead = self.cursor;
+        match self.tokens.get(ahead) {
+            Some(Token::Word(w)) if w.len() > 2 && w.ends_with("()") => ahead += 1,
+            Some(Token::Word(_))
+                if self.tokens.get(ahead + 1) == Some(&Token::Word("()".into())) =>
+            {
+                ahead += 2
+            }
+            _ => return false,
+        }
+        while self.tokens.get(ahead) == Some(&Token::Newline) {
+            ahead += 1;
+        }
+        self.tokens.get(ahead) == Some(&Token::LBrace)
+    }
+
+    /// Parses a function definition, from its name (or the `function`
+    /// keyword before it, when `keyword` is set) through its body.
+    pub(crate) fn parse_function(&mut self, keyword: bool) -> Option<Statement> {
+        if keyword {
+            self.cursor += 1; // consume 'function'
+        }
+        let Some(Token::Word(word)) = self.tokens.get(self.cursor) else {
+            return None;
+        };
+        let name = word.strip_suffix("()").unwrap_or(word).to_string();
+        self.cursor += 1;
+        if self.tokens.get(self.cursor) == Some(&Token::Word("()".into())) {
+            self.cursor += 1;
+        }
+        while self.tokens.get(self.cursor) == Some(&Token::Newline) {
+            self.cursor += 1;
+        }
+        let body = self.parse_block();
+        Some(Statement::Function { name, body })
+    }
+
     /// Parses a `{ ... }` body: a list of statements up to the matching `}`.
     pub(crate) fn parse_block(&mut self) -> List {
         if self.tokens.get(self.cursor) != Some(&Token::LBrace) {

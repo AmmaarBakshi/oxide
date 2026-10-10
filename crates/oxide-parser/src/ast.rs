@@ -113,6 +113,12 @@ pub enum Statement {
         values: Vec<String>,
         body: List,
     },
+    /// `name() { ... }` or `function name { ... }`: defines a function
+    /// that runs `body` when `name` is used as a command.
+    Function {
+        name: String,
+        body: List,
+    },
     Command(Command),
     Pipeline(Vec<Command>),
 }

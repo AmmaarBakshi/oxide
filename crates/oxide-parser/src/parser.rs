@@ -75,7 +75,11 @@ impl Parser {
                 "if" => return self.parse_if_statement(),
                 "while" => return self.parse_while_statement(),
                 "for" => return self.parse_for_statement(),
+                "function" => return self.parse_function(true),
                 _ => {} // Fall through to pipeline parsing
+            }
+            if self.at_function_definition() {
+                return self.parse_function(false);
             }
         }
 
@@ -221,6 +225,28 @@ mod tests {
             conditions[..],
             [Condition::Always, Condition::And, Condition::Or]
         ));
+    }
+
+    #[test]
+    fn functions_can_be_defined_three_ways() {
+        for input in [
+            "greet() { echo hi; echo there }",
+            "greet () {\n  echo hi\n  echo there\n}",
+            "function greet {\n  echo hi; echo there\n}",
+            "function greet()\n{\n  echo hi && echo there\n}",
+        ] {
+            let Statement::Function { name, body } = first_statement(input) else {
+                panic!("{input:?} is not a function definition");
+            };
+            assert_eq!(name, "greet", "{input:?}");
+            assert_eq!(body.len(), 2, "{input:?}");
+        }
+    }
+
+    #[test]
+    fn a_call_with_empty_parens_as_an_argument_is_not_a_definition() {
+        assert!(matches!(first_statement("echo ()"), Statement::Command(_)));
+        assert!(matches!(first_statement("f()"), Statement::Command(_)));
     }
 
     #[test]
