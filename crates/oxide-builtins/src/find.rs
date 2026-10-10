@@ -40,7 +40,11 @@ fn search_directory(dir: &Path, target: &str, out: &mut dyn Write) -> std::io::R
     for entry in entries.flatten() {
         let path = entry.path();
 
-        if path.is_dir() {
+        // `file_type` doesn't follow symlinks (or junctions, on Windows), so
+        // a link back up the tree is matched by name like a file instead of
+        // being walked again and again.
+        let is_dir = entry.file_type().is_ok_and(|t| t.is_dir());
+        if is_dir {
             search_directory(&path, target, out)?;
         } else if let Some(file_name) = path.file_name() {
             if file_name.to_string_lossy().contains(target) {
@@ -49,4 +53,50 @@ fn search_directory(dir: &Path, target: &str, out: &mut dyn Write) -> std::io::R
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::Path;
+
+    use crate::test_support::{run, scratch_dir};
+
+    #[test]
+    fn finds_matching_names_in_subdirectories() {
+        let dir = scratch_dir("find_nested");
+        fs::create_dir(dir.join("sub")).unwrap();
+        fs::write(dir.join("sub").join("data.json"), "").unwrap();
+        fs::write(dir.join("notes.txt"), "").unwrap();
+
+        let out = run("find", &[dir.to_str().unwrap(), ".json"], "");
+        assert_eq!(out.status, 0, "{}", out.stderr);
+        assert_eq!(out.stdout.trim_end(), dir.join("sub").join("data.json").display().to_string());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn does_not_follow_a_symlink_back_up_the_tree() {
+        let dir = scratch_dir("find_loop");
+        fs::write(dir.join("hit.txt"), "").unwrap();
+        if symlink_dir(&dir, &dir.join("loop")).is_err() {
+            // Windows without Developer Mode can't create symlinks.
+            eprintln!("skipping: cannot create a directory symlink here");
+            return;
+        }
+
+        let out = run("find", &[dir.to_str().unwrap(), "hit"], "");
+        assert_eq!(out.stdout.lines().count(), 1, "{}", out.stdout);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    fn symlink_dir(original: &Path, link: &Path) -> std::io::Result<()> {
+        std::os::unix::fs::symlink(original, link)
+    }
+
+    #[cfg(windows)]
+    fn symlink_dir(original: &Path, link: &Path) -> std::io::Result<()> {
+        std::os::windows::fs::symlink_dir(original, link)
+    }
 }
