@@ -2,10 +2,8 @@
 //!
 //! The lexer calls [`collect_body`] once it reaches the end of the line
 //! holding the `<<`, so the body arrives as part of the command instead of
-//! being run as commands of its own. [`read_payload`] is for when the body
-//! hasn't been typed yet and has to be asked for.
-
-use std::io::{self, Write};
+//! being run as commands of its own. At the prompt, a body that hasn't been
+//! typed yet is read like any other unfinished statement.
 
 /// The word after `<<` that ends a here-document, and how to read the body.
 #[derive(Clone, Debug, PartialEq)]
@@ -51,33 +49,6 @@ pub fn collect_body(lines: impl Iterator<Item = String>, delimiter: &Delimiter) 
         body.push('\n');
     }
     (body, false)
-}
-
-/// Takes over the terminal and reads lines until the delimiter is typed.
-pub fn read_payload(delimiter: &str) -> String {
-    let mut payload = String::new();
-    let stdin = io::stdin();
-
-    // We enter an infinite loop to capture multiline text
-    loop {
-        // The standard POSIX prompt for multiline shell inputs
-        print!("> ");
-        let _ = io::stdout().flush();
-
-        let mut line = String::new();
-        if stdin.read_line(&mut line).unwrap_or(0) == 0 {
-            break;
-        }
-
-        // If the user types EXACTLY the delimiter, we break the loop!
-        if line.trim_end() == delimiter {
-            break;
-        }
-
-        payload.push_str(&line);
-    }
-
-    payload
 }
 
 #[cfg(test)]

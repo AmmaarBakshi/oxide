@@ -38,18 +38,15 @@ impl Shell {
                     if trimmed.is_empty() {
                         continue;
                     }
-                    rl.add_history_entry(trimmed)?;
-                    self.state.history.push(trimmed.to_string());
-                    history::append(trimmed);
+                    // Ctrl+C at a `> ` prompt drops the whole statement.
+                    let Some(input) = complete_statement(trimmed, || rl.readline("> ")) else {
+                        println!("^C");
+                        continue;
+                    };
+                    rl.add_history_entry(input.as_str())?;
+                    self.state.history.push(input.clone());
+                    history::append(&input);
 
-                    // `cat <<EOF` on its own: the body comes on the lines
-                    // typed next, up to the delimiter.
-                    let mut input = trimmed.to_string();
-                    for delimiter in oxide_parser::lexer::unfinished_heredocs(&input) {
-                        input.push('\n');
-                        input.push_str(&oxide_parser::heredoc::read_payload(&delimiter));
-                        input.push_str(&delimiter);
-                    }
                     self.execute_line(&input);
                 }
                 Err(ReadlineError::Interrupted) => {
@@ -173,5 +170,88 @@ impl Shell {
             self.state.exit_status = Some(status);
             self.state.is_running = false;
         }
+    }
+}
+
+/// Reads further lines with `more` for as long as `input` is unfinished:
+/// an open block, quote or `$(`, a here-document still missing its
+/// delimiter, or a line ending in `|`, `&&`, `||` or `\`.
+///
+/// At end of input what was typed runs as it stands. `None` means the
+/// statement was abandoned with Ctrl+C.
+fn complete_statement(
+    input: &str,
+    mut more: impl FnMut() -> Result<String, ReadlineError>,
+) -> Option<String> {
+    let mut input = input.to_string();
+    while oxide_parser::is_incomplete(&input) {
+        match more() {
+            Ok(line) => {
+                input.push('\n');
+                input.push_str(&line);
+            }
+            Err(ReadlineError::Interrupted) => return None,
+            Err(_) => break,
+        }
+    }
+    Some(input)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Feeds `lines` to [`complete_statement`] one at a time, then ends.
+    fn complete(first: &str, lines: &[&str]) -> (Option<String>, usize) {
+        let mut lines = lines.iter();
+        let mut asked = 0;
+        let input = complete_statement(first, || {
+            asked += 1;
+            lines
+                .next()
+                .map(|l| l.to_string())
+                .ok_or(ReadlineError::Eof)
+        });
+        (input, asked)
+    }
+
+    #[test]
+    fn a_complete_line_is_not_extended() {
+        assert_eq!(complete("echo hi", &["never"]), (Some("echo hi".into()), 0));
+    }
+
+    #[test]
+    fn open_blocks_quotes_and_pipes_ask_for_more() {
+        assert_eq!(
+            complete("if true {", &["echo yes", "}", "never"]),
+            (Some("if true {\necho yes\n}".into()), 2)
+        );
+        assert_eq!(
+            complete("echo 'a", &["b'"]),
+            (Some("echo 'a\nb'".into()), 1)
+        );
+        assert_eq!(complete("ls |", &["sort"]), (Some("ls |\nsort".into()), 1));
+    }
+
+    #[test]
+    fn here_documents_read_up_to_their_delimiter() {
+        assert_eq!(
+            complete("cat <<EOF", &["one", "two", "EOF", "never"]),
+            (Some("cat <<EOF\none\ntwo\nEOF".into()), 3)
+        );
+    }
+
+    #[test]
+    fn end_of_input_runs_what_was_typed() {
+        assert_eq!(
+            complete("for x in a {", &[]),
+            (Some("for x in a {".into()), 1)
+        );
+    }
+
+    #[test]
+    fn ctrl_c_abandons_the_statement() {
+        let input = complete_statement("while true {", || Err(ReadlineError::Interrupted));
+        assert_eq!(input, None);
     }
 }
