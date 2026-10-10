@@ -31,6 +31,8 @@ pub enum Token {
     Background, // Add this
     Newline,
     Semicolon,
+    /// `;;`, which ends an arm of a `case`.
+    DoubleSemi,
     While,
     For,
     In,
@@ -65,6 +67,7 @@ impl fmt::Display for Token {
             Token::Background => write!(f, "&"), // Add this
             Token::Newline => writeln!(f),
             Token::Semicolon => write!(f, ";"),
+            Token::DoubleSemi => write!(f, ";;"),
         }
     }
 }

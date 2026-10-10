@@ -1,4 +1,4 @@
-use crate::ast::{List, Statement};
+use crate::ast::{CaseArm, List, Statement};
 use crate::parser::Parser;
 use crate::token::Token;
 
@@ -75,6 +75,73 @@ impl Parser {
             values,
             body,
         })
+    }
+
+    /// Parses `case WORD in`, its arms, and the closing `esac`.
+    pub(crate) fn parse_case_statement(&mut self) -> Option<Statement> {
+        self.cursor += 1; // consume 'case'
+        let Some(Token::Word(word)) = self.tokens.get(self.cursor) else {
+            return None;
+        };
+        let word = word.clone();
+        self.cursor += 1;
+        self.skip_newlines();
+        if self.tokens.get(self.cursor) == Some(&Token::Word("in".into())) {
+            self.cursor += 1;
+        }
+
+        let mut arms = Vec::new();
+        loop {
+            self.skip_newlines();
+            match self.tokens.get(self.cursor) {
+                None => break,
+                Some(Token::Word(w)) if w == "esac" => {
+                    self.cursor += 1;
+                    break;
+                }
+                _ => {}
+            }
+            let patterns = self.case_patterns();
+            let body = self.parse_list(|token| {
+                matches!(token, Token::DoubleSemi) || matches!(token, Token::Word(w) if w == "esac")
+            });
+            if self.tokens.get(self.cursor) == Some(&Token::DoubleSemi) {
+                self.cursor += 1;
+            }
+            arms.push(CaseArm { patterns, body });
+        }
+        Some(Statement::Case { word, arms })
+    }
+
+    /// Reads an arm's `pat1 | pat2)` up to and including its `)`.
+    fn case_patterns(&mut self) -> Vec<String> {
+        let mut patterns = Vec::new();
+        while let Some(Token::Word(w)) = self.tokens.get(self.cursor) {
+            self.cursor += 1;
+            // An arm may also open with `(`, as in `(a|b)`.
+            let w = if patterns.is_empty() {
+                w.strip_prefix('(').unwrap_or(w)
+            } else {
+                w.as_str()
+            };
+            if let Some(last) = w.strip_suffix(')') {
+                if !last.is_empty() {
+                    patterns.push(last.to_string());
+                }
+                break;
+            }
+            patterns.push(w.to_string());
+            if self.tokens.get(self.cursor) == Some(&Token::Pipe) {
+                self.cursor += 1;
+            }
+        }
+        patterns
+    }
+
+    fn skip_newlines(&mut self) {
+        while self.tokens.get(self.cursor) == Some(&Token::Newline) {
+            self.cursor += 1;
+        }
     }
 
     /// Whether the statement here defines a function: `name() {` or

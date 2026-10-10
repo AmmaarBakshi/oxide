@@ -3,7 +3,9 @@ use crate::which::{is_builtin, search_path};
 use crate::{Ctx, Io};
 
 /// Words the parser treats as syntax rather than as commands to run.
-pub const KEYWORDS: &[&str] = &["if", "elif", "else", "while", "for", "in"];
+pub const KEYWORDS: &[&str] = &[
+    "if", "elif", "else", "while", "for", "in", "case", "esac", "function",
+];
 
 pub fn run(args: &[String], io: &mut Io<'_>, ctx: &mut Ctx<'_>) -> i32 {
     let (flags, names) = match parse_flags(args, "at") {

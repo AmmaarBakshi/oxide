@@ -381,6 +381,10 @@ impl Executor {
         match statement {
             Statement::Command(cmd) => self.run_command(cmd, env),
             Statement::Pipeline(commands) => self.run_pipeline(commands, env),
+            Statement::Case { .. } => {
+                eprintln!("oxide: case: not supported yet");
+                *env.last_exit_code = 1;
+            }
             Statement::Function { name, body } => {
                 self.functions.insert(name.clone(), Rc::new(body.clone()));
                 *env.last_exit_code = 0;

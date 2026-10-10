@@ -79,6 +79,14 @@ pub enum Condition {
     Or,
 }
 
+/// One `PATTERN | PATTERN) LIST ;;` arm of a `case`.
+#[derive(Clone, Debug)]
+pub struct CaseArm {
+    /// Glob patterns as written; any one matching selects the arm.
+    pub patterns: Vec<String>,
+    pub body: List,
+}
+
 /// One statement in a list, and how it hangs off the one before: always
 /// run, or only after a success (`&&`) or a failure (`||`).
 #[derive(Clone, Debug)]
@@ -112,6 +120,12 @@ pub enum Statement {
         variable: String,
         values: Vec<String>,
         body: List,
+    },
+    /// `case WORD in PATTERN) LIST ;; ... esac`: runs the first arm with a
+    /// pattern matching the word.
+    Case {
+        word: String,
+        arms: Vec<CaseArm>,
     },
     /// `name() { ... }` or `function name { ... }`: defines a function
     /// that runs `body` when `name` is used as a command.

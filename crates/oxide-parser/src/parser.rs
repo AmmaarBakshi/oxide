@@ -75,6 +75,7 @@ impl Parser {
                 "if" => return self.parse_if_statement(),
                 "while" => return self.parse_while_statement(),
                 "for" => return self.parse_for_statement(),
+                "case" => return self.parse_case_statement(),
                 "function" => return self.parse_function(true),
                 _ => {} // Fall through to pipeline parsing
             }
@@ -247,6 +248,29 @@ mod tests {
     fn a_call_with_empty_parens_as_an_argument_is_not_a_definition() {
         assert!(matches!(first_statement("echo ()"), Statement::Command(_)));
         assert!(matches!(first_statement("f()"), Statement::Command(_)));
+    }
+
+    #[test]
+    fn case_arms_take_patterns_and_bodies() {
+        let Statement::Case { word, arms } = first_statement(
+            "case $file in\n  *.rs | *.toml) echo rust; echo again ;;\n  (docs) echo docs ;;\n  *) echo other\nesac",
+        ) else {
+            panic!("expected a case");
+        };
+        assert_eq!(word, "$file");
+        let patterns: Vec<_> = arms.iter().map(|arm| arm.patterns.clone()).collect();
+        assert_eq!(patterns, [vec!["*.rs", "*.toml"], vec!["docs"], vec!["*"]]);
+        let lengths: Vec<_> = arms.iter().map(|arm| arm.body.len()).collect();
+        assert_eq!(lengths, [2, 1, 1]);
+    }
+
+    #[test]
+    fn a_case_can_sit_on_one_line() {
+        let Statement::Case { arms, .. } = first_statement("case x in a) one ;; b) two ;; esac")
+        else {
+            panic!("expected a case");
+        };
+        assert_eq!(arms.len(), 2);
     }
 
     #[test]

@@ -34,14 +34,30 @@ pub fn is_incomplete(input: &str) -> bool {
     if lexer.unterminated {
         return true;
     }
-    let open_blocks: i32 = tokens
-        .iter()
-        .map(|token| match token {
+    // `{` opens a block and `case` a case statement; `}` and `esac` close
+    // them. A keyword only counts where a command could start.
+    let mut open_blocks = 0;
+    let mut command_start = true;
+    for token in &tokens {
+        open_blocks += match token {
             Token::LBrace => 1,
             Token::RBrace => -1,
+            Token::Word(w) if command_start && w == "case" => 1,
+            Token::Word(w) if command_start && w == "esac" => -1,
             _ => 0,
-        })
-        .sum();
+        };
+        command_start = matches!(
+            token,
+            Token::Newline
+                | Token::Semicolon
+                | Token::DoubleSemi
+                | Token::LBrace
+                | Token::RBrace
+                | Token::And
+                | Token::Or
+                | Token::Pipe
+        );
+    }
     if open_blocks > 0 {
         return true;
     }
@@ -125,8 +141,12 @@ impl<'a> Lexer<'a> {
                     }
                 }
                 ';' => {
-                    self.input.next();
-                    tokens.push(Token::Newline);
+                    if self.eat(";;") {
+                        tokens.push(Token::DoubleSemi);
+                    } else {
+                        self.input.next();
+                        tokens.push(Token::Newline);
+                    }
                 }
                 // A `{` on its own opens a block; one with text right after it
                 // starts a word to brace-expand, like `{a,b}`.
@@ -544,6 +564,7 @@ mod tests {
             "false ||",
             "echo a \\",
             "echo a \\\n",
+            "case $x in\n  a) echo a ;;",
         ] {
             assert!(is_incomplete(input), "{input:?} should be incomplete");
         }
@@ -558,6 +579,8 @@ mod tests {
             "ls | wc",
             "echo # open quote ' in a comment",
             "echo a \\\n b",
+            "case $x in a) echo a ;; esac",
+            "echo case",
             "",
         ] {
             assert!(!is_incomplete(input), "{input:?} should be complete");
