@@ -581,6 +581,7 @@ name = "oxide-exec"
 version = "0.1.0"
 dependencies = [
  "ctrlc",
+ "glob",
  "oxide-builtins",
  "oxide-compat",
  "oxide-data",

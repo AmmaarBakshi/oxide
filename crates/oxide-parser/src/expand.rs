@@ -62,6 +62,17 @@ pub fn expand_word(word: &str, ctx: &mut dyn Context) -> Vec<String> {
     fields
 }
 
+/// Expands `word` into a glob pattern, for `case`: `$` expansions are
+/// replaced, and quoted characters, which must match literally, come out
+/// escaped.
+pub fn expand_pattern(word: &str, ctx: &mut dyn Context) -> String {
+    expand(word, false, ctx)
+        .into_iter()
+        .next()
+        .map(|field| field.pattern)
+        .unwrap_or_default()
+}
+
 /// Expands `word` to exactly one string, with no field splitting or
 /// globbing. Used where a single value is wanted: assignment values,
 /// redirection targets and declarations such as `export NAME=value`.
@@ -610,6 +621,14 @@ mod tests {
         let mut none = Args(vec![]);
         assert!(expand_word("\"$@\"", &mut none).is_empty());
         assert_eq!(expand_word("\"x$@\"", &mut none), ["x"]);
+    }
+
+    #[test]
+    fn patterns_escape_what_was_quoted() {
+        let mut ctx = Status(0);
+        assert_eq!(expand_pattern("*.rs", &mut ctx), "*.rs");
+        assert_eq!(expand_pattern("'*'.rs", &mut ctx), "[*].rs");
+        assert_eq!(expand_pattern("\"a?\"b*", &mut ctx), "a[?]b*");
     }
 
     #[test]

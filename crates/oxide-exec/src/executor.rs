@@ -19,7 +19,7 @@ use std::rc::Rc;
 use oxide_builtins::{Ctx, Io};
 use oxide_compat::CompatMode;
 use oxide_parser::ast::{Assignment, Command, Condition, Executable, HereInput, List, Statement};
-use oxide_parser::expand::{expand_heredoc, expand_string, expand_word, Context};
+use oxide_parser::expand::{expand_heredoc, expand_pattern, expand_string, expand_word, Context};
 use oxide_parser::lexer::Lexer;
 use oxide_parser::parser::Parser;
 use oxide_perf::cache::CommandCache;
@@ -381,9 +381,19 @@ impl Executor {
         match statement {
             Statement::Command(cmd) => self.run_command(cmd, env),
             Statement::Pipeline(commands) => self.run_pipeline(commands, env),
-            Statement::Case { .. } => {
-                eprintln!("oxide: case: not supported yet");
-                *env.last_exit_code = 1;
+            Statement::Case { word, arms } => {
+                let word = expand_string(word, &mut self.context(env));
+                for arm in arms {
+                    for pattern in &arm.patterns {
+                        let pattern = expand_pattern(pattern, &mut self.context(env));
+                        if pattern_matches(&pattern, &word) {
+                            self.execute_list(&arm.body, env);
+                            return;
+                        }
+                    }
+                }
+                // No arm matched, which counts as success.
+                *env.last_exit_code = 0;
             }
             Statement::Function { name, body } => {
                 self.functions.insert(name.clone(), Rc::new(body.clone()));
@@ -1070,6 +1080,16 @@ impl Executor {
 // ==========================================
 // HELPERS
 // ==========================================
+
+/// Whether `word` matches the glob `pattern`, as a `case` arm tests it: the
+/// whole word, with `*` free to match `/` too. A malformed pattern only
+/// matches itself.
+fn pattern_matches(pattern: &str, word: &str) -> bool {
+    match glob::Pattern::new(pattern) {
+        Ok(compiled) => compiled.matches(word),
+        Err(_) => pattern == word,
+    }
+}
 
 /// Writes output gathered from a function to where `cmd` sends its stdout:
 /// a redirect target, stderr for `>&2`, a `$(...)` capture, or the terminal.

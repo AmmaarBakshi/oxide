@@ -150,3 +150,31 @@ fn break_outside_a_loop_is_an_error() {
         0,
     );
 }
+
+#[test]
+fn case_runs_the_first_matching_arm() {
+    let script = "for f in main.rs Cargo.toml README.md notes {
+    case $f in
+        *.rs | *.toml) echo $f: rust ;;
+        README*) echo $f: docs ;;
+        *) echo $f: other ;;
+    esac
+}
+";
+    run_stdin("case-arms", script)
+        .assert_ok("main.rs: rust\nCargo.toml: rust\nREADME.md: docs\nnotes: other\n");
+}
+
+#[test]
+fn case_patterns_can_use_variables_and_quotes() {
+    run_c(
+        "case-vars",
+        "want=b*; for x in bee 'b*' { case $x in \"$want\") echo literal $x ;; $want) echo glob $x ;; esac }",
+    )
+    .assert_ok("glob bee\nliteral b*\n");
+}
+
+#[test]
+fn case_with_no_match_succeeds_quietly() {
+    run_c("case-none", "false; case zz in a) echo a ;; esac; echo $?").assert_ok("0\n");
+}
