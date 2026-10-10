@@ -27,6 +27,13 @@ use oxide_security::permissions::PermissionManager;
 
 use crate::pipeline::{builtin_sink, spawn_stage, SharedBuf, Upstream};
 
+/// Control flow that unwinds out of whatever is running until something
+/// catches it: `return` leaves the current function.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Unwind {
+    Return,
+}
+
 /// How deep functions may call each other before the shell gives up, so a
 /// function that calls itself forever fails instead of crashing the shell.
 const MAX_CALL_DEPTH: usize = 200;
@@ -57,6 +64,8 @@ pub struct Executor {
     /// One frame per running function call, holding what its `local`
     /// declarations hid.
     frames: Vec<oxide_script::scope::Frame>,
+    /// Set by `return` until the function it leaves has been left.
+    unwind: Option<Unwind>,
 }
 
 /// The shell state a command runs against.
@@ -93,6 +102,7 @@ enum ExecutorBuiltin {
     Local,
     Mode,
     Refresh,
+    Return,
     Source,
 }
 
@@ -107,6 +117,7 @@ impl ExecutorBuiltin {
             "local" => Self::Local,
             "mode" => Self::Mode,
             "refresh" => Self::Refresh,
+            "return" => Self::Return,
             "source" => Self::Source,
             _ => return None,
         })
@@ -169,6 +180,7 @@ impl Executor {
             positional: Vec::new(),
             shell_name: "oxide".to_string(),
             frames: Vec::new(),
+            unwind: None,
         }
     }
 
@@ -291,10 +303,16 @@ impl Executor {
         exec_timer.stop("Execution Engine");
     }
 
+    /// Whether running should stop here: the shell is exiting, or a
+    /// `return` is on its way out.
+    fn stopped(&self) -> bool {
+        self.exit_status.is_some() || self.unwind.is_some()
+    }
+
     /// Runs a list of statements, honoring `&&` and `||` between them.
     fn execute_list(&mut self, list: &[Executable], env: &mut ExecEnv<'_>) {
         for exec in list {
-            if self.exit_status.is_some() {
+            if self.stopped() {
                 return;
             }
 
@@ -321,7 +339,7 @@ impl Executor {
     /// last command exited with status 0.
     fn condition_holds(&mut self, condition: &[Executable], env: &mut ExecEnv<'_>) -> bool {
         self.execute_list(condition, env);
-        self.exit_status.is_none() && *env.last_exit_code == 0
+        !self.stopped() && *env.last_exit_code == 0
     }
 
     fn execute_statement(&mut self, statement: &Statement, env: &mut ExecEnv<'_>) {
@@ -350,7 +368,7 @@ impl Executor {
                 }
                 if let Some(else_statements) = else_body {
                     self.execute_list(else_statements, env);
-                } else if self.exit_status.is_none() {
+                } else if !self.stopped() {
                     // No branch ran, which counts as success.
                     *env.last_exit_code = 0;
                 }
@@ -378,7 +396,7 @@ impl Executor {
                     // Expand variables (e.g. $VAR) and globs (e.g. *.txt)
                     let fields = expand_word(val, &mut self.context(env));
                     for final_val in fields {
-                        if self.exit_status.is_some() {
+                        if self.stopped() {
                             return;
                         }
                         self.set_var(variable, final_val);
@@ -564,6 +582,8 @@ impl Executor {
         self.call_depth += 1;
         self.frames.push(oxide_script::scope::Frame::default());
         self.execute_list(body, env);
+        // A `return` stops here, at the function it was leaving.
+        self.unwind = None;
         if let Some(frame) = self.frames.pop() {
             frame.restore(&mut self.vars);
         }
@@ -780,6 +800,29 @@ impl Executor {
                 *env.mode = CompatMode::Oxide;
                 println!("Oxide Shell refreshed. System state reset to defaults.");
                 0
+            }
+
+            ExecutorBuiltin::Return => {
+                if self.call_depth == 0 {
+                    eprintln!("oxide: return: can only return from a function");
+                    return 1;
+                }
+                let status = match args {
+                    [] => *env.last_exit_code,
+                    [code] => match code.parse::<i64>() {
+                        Ok(n) => (n & 0xff) as i32,
+                        Err(_) => {
+                            eprintln!("oxide: return: {}: numeric argument required", code);
+                            2
+                        }
+                    },
+                    _ => {
+                        eprintln!("oxide: return: too many arguments");
+                        return 1;
+                    }
+                };
+                self.unwind = Some(Unwind::Return);
+                status
             }
 
             ExecutorBuiltin::Source => {

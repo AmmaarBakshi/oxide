@@ -114,3 +114,30 @@ fn local_outside_a_function_is_an_error() {
         1,
     );
 }
+
+#[test]
+fn return_leaves_the_function_with_a_status() {
+    run_c(
+        "fn-return",
+        "check() { if [ $1 = ok ] { return 0 }; echo bad: $1; return 3; echo never }; check ok; echo $?; check no; echo $?",
+    )
+    .assert_ok("0\nbad: no\n3\n");
+}
+
+#[test]
+fn return_from_inside_a_loop_leaves_the_whole_function() {
+    run_c(
+        "fn-return-loop",
+        "first() { for x in a b c { echo $x; return } }; first; echo after",
+    )
+    .assert_ok("a\nafter\n");
+}
+
+#[test]
+fn return_outside_a_function_is_an_error() {
+    run_c("fn-return-top", "return 1; echo still here").assert(
+        "still here\n",
+        "oxide: return: can only return from a function\n",
+        0,
+    );
+}
