@@ -35,3 +35,12 @@ fn a_bad_substitution_fails_the_command() {
         0,
     );
 }
+
+#[test]
+fn hash_gives_the_length() {
+    run_c(
+        "param-length",
+        "word=oxide; echo ${#word}; f() { echo ${#} ${#1} }; f abc de",
+    )
+    .assert_ok("5\n2 3\n");
+}

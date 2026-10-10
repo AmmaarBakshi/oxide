@@ -437,11 +437,21 @@ fn split_parameter(body: &str) -> (&str, &str) {
 /// Expands the inside of a `${...}`: a parameter, optionally followed by
 /// an operator and a word.
 ///
+/// - `${#NAME}`: the length of NAME's value, in characters;
 /// - `${NAME:-word}`: the word if NAME is unset or empty;
 /// - `${NAME:=word}`: the same, and NAME is set to it;
 ///
 /// and `-` / `=` without the colon, which act only when NAME is unset.
 fn parameter(body: &str, ctx: &mut dyn Context) -> Dollar {
+    // `${#NAME}`. (A bare `${#}` is the number of positional parameters.)
+    if let Some(after) = body.strip_prefix('#') {
+        let (name, rest) = split_parameter(after);
+        if !name.is_empty() && rest.is_empty() {
+            let length = lookup(name, ctx).chars().count();
+            return Dollar::Value(length.to_string());
+        }
+    }
+
     let (name, rest) = split_parameter(body);
     if name.is_empty() {
         ctx.report(&format!("${{{}}}: bad substitution", body));
@@ -820,6 +830,13 @@ mod tests {
             expand_string("${UNSET:-$SET and ${ALSO:-$(cmd)}}", &mut ctx),
             "value and <cmd>"
         );
+    }
+
+    #[test]
+    fn hash_gives_the_length() {
+        let mut ctx = vars(&[("WORD", "héllo"), ("EMPTY", "")]);
+        assert_eq!(expand_string("${#WORD}", &mut ctx), "5");
+        assert_eq!(expand_string("${#EMPTY}${#UNSET}", &mut ctx), "00");
     }
 
     #[test]
