@@ -19,7 +19,7 @@ pub fn run(args: &[String], io: &mut Io<'_>, ctx: &mut Ctx<'_>) -> i32 {
         return 2;
     }
     // -a: every meaning a name has, not just the one that wins.
-    // -t: one word for the kind (alias, keyword, builtin, file) instead.
+    // -t: one word for the kind (alias, keyword, function, builtin, file).
     let all = flags.contains('a');
     let terse = flags.contains('t');
 
@@ -31,6 +31,9 @@ pub fn run(args: &[String], io: &mut Io<'_>, ctx: &mut Ctx<'_>) -> i32 {
         }
         if KEYWORDS.contains(&name) {
             found.push(("keyword", format!("{} is a shell keyword", name)));
+        }
+        if (ctx.is_function)(name) {
+            found.push(("function", format!("{} is a function", name)));
         }
         if is_builtin(name) {
             found.push(("builtin", format!("{} is a shell builtin", name)));
@@ -72,6 +75,12 @@ mod tests {
         );
         let out = run_with_aliases("type", &["ll"], &[("ll", "ls -a")]);
         assert_eq!(out.stdout, "ll is aliased to `ls -a'\n");
+    }
+
+    #[test]
+    fn functions_come_before_builtins() {
+        let out = run("type", &["-t", "test_support_fn"], "");
+        assert_eq!(out.stdout, "function\n");
     }
 
     #[test]

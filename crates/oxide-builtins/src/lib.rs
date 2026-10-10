@@ -76,6 +76,9 @@ pub struct Ctx<'a> {
     /// processes don't see them. Exported variables live in the process
     /// environment instead.
     pub vars: &'a mut HashMap<String, String>,
+    /// Whether a name is a shell function, for `type`. (The functions
+    /// themselves live in the executor.)
+    pub is_function: &'a dyn Fn(&str) -> bool,
 }
 
 /// Builtins that `oxide-exec` dispatches itself because they need executor

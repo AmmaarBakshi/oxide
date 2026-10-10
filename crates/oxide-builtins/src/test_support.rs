@@ -55,6 +55,7 @@ fn run_in(
         aliases: &mut aliases,
         history: &history,
         vars: &mut vars,
+        is_function: &|name| name == "test_support_fn",
     };
 
     let status = {

@@ -27,6 +27,10 @@ use oxide_security::permissions::PermissionManager;
 
 use crate::pipeline::{builtin_sink, spawn_stage, SharedBuf, Upstream};
 
+/// How deep functions may call each other before the shell gives up, so a
+/// function that calls itself forever fails instead of crashing the shell.
+const MAX_CALL_DEPTH: usize = 200;
+
 pub struct Executor {
     pub runtime: oxide_script::runtime::Runtime,
     pub script_scope: oxide_script::scope::Scope,
@@ -43,6 +47,8 @@ pub struct Executor {
     /// redefined while it is running without pulling its body out from
     /// under it.
     pub functions: HashMap<String, Rc<List>>,
+    /// How many function calls are running, one inside the next.
+    call_depth: usize,
 }
 
 /// The shell state a command runs against.
@@ -137,6 +143,7 @@ impl Executor {
             vars: HashMap::new(),
             substitution_status: None,
             functions: HashMap::new(),
+            call_depth: 0,
         }
     }
 
@@ -403,6 +410,19 @@ impl Executor {
             return;
         }
 
+        // A function shadows any builtin or program of the same name.
+        if let Some(body) = self.functions.get(&cmd.program).cloned() {
+            *env.last_exit_code = if cmd.outfile.is_some() || cmd.out_to_err {
+                // Redirected: gather the body's output, then send it on.
+                let (code, output) = self.call_function_captured(cmd, &body, env);
+                send_output(cmd, &output, env);
+                code
+            } else {
+                self.call_function(&cmd.program, &body, env)
+            };
+            return;
+        }
+
         if let Some(kind) = ExecutorBuiltin::lookup(&cmd.program) {
             *env.last_exit_code = self.run_executor_builtin(kind, &cmd.args, env);
             return;
@@ -412,13 +432,120 @@ impl Executor {
             let input = crate::process::here_bytes(cmd)
                 .map(Upstream::Buffer)
                 .unwrap_or(Upstream::None);
-            let (code, _) =
-                run_builtin_stage(builtin, &cmd.args, input, cmd, true, &mut self.vars, env);
+            let (code, _) = self.run_builtin_stage(builtin, &cmd.args, input, cmd, true, env);
             *env.last_exit_code = code;
             return;
         }
 
         self.spawn_external(cmd, &cmd.args, env);
+    }
+
+    /// Runs a registry builtin, wiring its three streams from `upstream` and the
+    /// command's redirects. Returns the exit code and what the next pipeline
+    /// stage should read.
+    fn run_builtin_stage(
+        &mut self,
+        builtin: &dyn oxide_builtins::Builtin,
+        args: &[String],
+        upstream: Upstream,
+        cmd: &Command,
+        is_last: bool,
+        env: &mut ExecEnv<'_>,
+    ) -> (i32, Upstream) {
+        let mut reader = match upstream.into_reader(&cmd.infile) {
+            Ok(reader) => reader,
+            Err(e) => {
+                eprintln!("{}", e);
+                return (1, Upstream::None);
+            }
+        };
+
+        let mut sink = match builtin_sink(is_last, &cmd.outfile, cmd.append, env.capture.as_ref()) {
+            Ok(sink) => sink,
+            Err(e) => {
+                eprintln!("{}", e);
+                return (1, Upstream::None);
+            }
+        };
+
+        let mut stderr: Box<dyn Write> = match &cmd.errfile {
+            Some(path) => match crate::redirect::open_output(path, cmd.err_append) {
+                Ok(file) => Box::new(file),
+                Err(e) => {
+                    eprintln!("oxide: redirection error: {}: {}", path, e);
+                    return (1, Upstream::None);
+                }
+            },
+            None => Box::new(std::io::stderr()),
+        };
+        let functions = &self.functions;
+        let is_function = |name: &str| functions.contains_key(name);
+        let mut ctx = Ctx {
+            aliases: &mut *env.aliases,
+            history: env.history,
+            vars: &mut self.vars,
+            is_function: &is_function,
+        };
+
+        let code = if cmd.err_to_out || cmd.out_to_err {
+            // `2>&1` / `>&2`: both streams write into one buffer, so lines keep
+            // the order they were written in, and it all goes where they were
+            // joined.
+            let merged = SharedBuf::default();
+            let (mut out, mut err) = (merged.clone(), merged.clone());
+            let code = {
+                let mut io = Io::new(&mut *reader, &mut out, &mut err);
+                builtin.run(args, &mut io, &mut ctx)
+            };
+            let dest: &mut dyn Write = if cmd.err_to_out {
+                sink.as_writer()
+            } else {
+                &mut *stderr
+            };
+            let _ = dest.write_all(&merged.take());
+            code
+        } else {
+            let mut io = Io::new(&mut *reader, sink.as_writer(), &mut *stderr);
+            builtin.run(args, &mut io, &mut ctx)
+        };
+
+        // Drop the read end before the caller waits on any upstream process. A
+        // builtin that ignores its input (`ls | echo hi`) would otherwise leave
+        // the producer blocked on a pipe nobody is draining.
+        drop(reader);
+
+        (code, sink.finish())
+    }
+
+    /// Runs a function's body in this shell and returns its status.
+    fn call_function(&mut self, name: &str, body: &List, env: &mut ExecEnv<'_>) -> i32 {
+        if self.call_depth >= MAX_CALL_DEPTH {
+            eprintln!(
+                "oxide: {}: maximum function nesting level ({}) exceeded",
+                name, MAX_CALL_DEPTH
+            );
+            return 1;
+        }
+        self.call_depth += 1;
+        self.execute_list(body, env);
+        self.call_depth -= 1;
+        *env.last_exit_code
+    }
+
+    /// Calls a function with everything it writes to stdout gathered up, for
+    /// a call that is redirected or feeds a pipeline. Unlike `$(...)` it
+    /// runs in this shell, so its variables stick.
+    fn call_function_captured(
+        &mut self,
+        cmd: &Command,
+        body: &List,
+        env: &mut ExecEnv<'_>,
+    ) -> (i32, Vec<u8>) {
+        let buf = SharedBuf::default();
+        let outer = env.capture.replace(buf.clone());
+        let code = self.call_function(&cmd.program, body, env);
+        env.capture = outer;
+        (code, buf.take())
     }
 
     /// Runs the security gate and writes the audit record. Returns false when
@@ -661,6 +788,20 @@ impl Executor {
                 break;
             }
 
+            if let Some(body) = self.functions.get(&cmd.program).cloned() {
+                // A function's output is gathered and handed on like a
+                // builtin's.
+                let (code, output) = self.call_function_captured(cmd, &body, env);
+                if is_last {
+                    send_output(cmd, &output, env);
+                    *env.last_exit_code = code;
+                    status_from_child = false;
+                } else {
+                    upstream = Upstream::Buffer(output);
+                }
+                continue;
+            }
+
             if ExecutorBuiltin::lookup(&cmd.program).is_some() {
                 eprintln!("oxide: '{}' cannot be used in a pipeline yet", cmd.program);
                 *env.last_exit_code = 1;
@@ -668,15 +809,8 @@ impl Executor {
             }
 
             if let Some(builtin) = oxide_builtins::registry().get(&cmd.program) {
-                let (code, next) = run_builtin_stage(
-                    builtin,
-                    &cmd.args,
-                    upstream.take(),
-                    cmd,
-                    is_last,
-                    &mut self.vars,
-                    env,
-                );
+                let (code, next) =
+                    self.run_builtin_stage(builtin, &cmd.args, upstream.take(), cmd, is_last, env);
                 upstream = next;
                 if is_last {
                     *env.last_exit_code = code;
@@ -744,6 +878,22 @@ impl Executor {
 // ==========================================
 // HELPERS
 // ==========================================
+
+/// Writes output gathered from a function to where `cmd` sends its stdout:
+/// a redirect target, stderr for `>&2`, a `$(...)` capture, or the terminal.
+fn send_output(cmd: &Command, output: &[u8], env: &ExecEnv<'_>) {
+    if cmd.out_to_err {
+        let _ = std::io::stderr().write_all(output);
+        return;
+    }
+    match builtin_sink(true, &cmd.outfile, cmd.append, env.capture.as_ref()) {
+        Ok(mut sink) => {
+            let _ = sink.as_writer().write_all(output);
+            sink.finish();
+        }
+        Err(e) => eprintln!("{}", e),
+    }
+}
 
 /// Environment variables set for a single command by `FOO=1 cmd`. Dropping
 /// it puts each one back as it was, so the assignment never outlives the
@@ -818,80 +968,6 @@ fn expand_command(cmd: &Command, ctx: &mut dyn Context) -> Command {
         out_to_err: cmd.out_to_err,
         here,
     }
-}
-
-/// Runs a registry builtin, wiring its three streams from `upstream` and the
-/// command's redirects. Returns the exit code and what the next pipeline
-/// stage should read.
-fn run_builtin_stage(
-    builtin: &dyn oxide_builtins::Builtin,
-    args: &[String],
-    upstream: Upstream,
-    cmd: &Command,
-    is_last: bool,
-    vars: &mut HashMap<String, String>,
-    env: &mut ExecEnv<'_>,
-) -> (i32, Upstream) {
-    let mut reader = match upstream.into_reader(&cmd.infile) {
-        Ok(reader) => reader,
-        Err(e) => {
-            eprintln!("{}", e);
-            return (1, Upstream::None);
-        }
-    };
-
-    let mut sink = match builtin_sink(is_last, &cmd.outfile, cmd.append, env.capture.as_ref()) {
-        Ok(sink) => sink,
-        Err(e) => {
-            eprintln!("{}", e);
-            return (1, Upstream::None);
-        }
-    };
-
-    let mut stderr: Box<dyn Write> = match &cmd.errfile {
-        Some(path) => match crate::redirect::open_output(path, cmd.err_append) {
-            Ok(file) => Box::new(file),
-            Err(e) => {
-                eprintln!("oxide: redirection error: {}: {}", path, e);
-                return (1, Upstream::None);
-            }
-        },
-        None => Box::new(std::io::stderr()),
-    };
-    let mut ctx = Ctx {
-        aliases: &mut *env.aliases,
-        history: env.history,
-        vars,
-    };
-
-    let code = if cmd.err_to_out || cmd.out_to_err {
-        // `2>&1` / `>&2`: both streams write into one buffer, so lines keep
-        // the order they were written in, and it all goes where they were
-        // joined.
-        let merged = SharedBuf::default();
-        let (mut out, mut err) = (merged.clone(), merged.clone());
-        let code = {
-            let mut io = Io::new(&mut *reader, &mut out, &mut err);
-            builtin.run(args, &mut io, &mut ctx)
-        };
-        let dest: &mut dyn Write = if cmd.err_to_out {
-            sink.as_writer()
-        } else {
-            &mut *stderr
-        };
-        let _ = dest.write_all(&merged.take());
-        code
-    } else {
-        let mut io = Io::new(&mut *reader, sink.as_writer(), &mut *stderr);
-        builtin.run(args, &mut io, &mut ctx)
-    };
-
-    // Drop the read end before the caller waits on any upstream process. A
-    // builtin that ignores its input (`ls | echo hi`) would otherwise leave
-    // the producer blocked on a pipe nobody is draining.
-    drop(reader);
-
-    (code, sink.finish())
 }
 
 /// Resolves `program` to an absolute path by scanning `PATH`, caching the
