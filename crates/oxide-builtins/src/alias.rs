@@ -14,6 +14,11 @@ pub fn run(args: &[String], io: &mut Io<'_>, ctx: &mut Ctx<'_>) -> i32 {
     let mut status = 0;
     for arg in args {
         if let Some((key, value)) = arg.split_once('=') {
+            if !is_valid_name(key) {
+                ewln!(io, "oxide: alias: '{}': invalid alias name", key);
+                status = 1;
+                continue;
+            }
             let clean_value = value.trim_matches(|c| c == '"' || c == '\'');
             ctx.aliases.insert(key.to_string(), clean_value.to_string());
         } else if let Some(val) = ctx.aliases.get(arg.as_str()) {
@@ -25,6 +30,17 @@ pub fn run(args: &[String], io: &mut Io<'_>, ctx: &mut Ctx<'_>) -> i32 {
         }
     }
     status
+}
+
+/// Whether `name` could ever be expanded. The executor only matches the
+/// first whitespace-separated word of a line, so an empty name or one with
+/// blanks never fires; quotes, `$`, `/` and shell metacharacters are refused
+/// the same way bash refuses them.
+fn is_valid_name(name: &str) -> bool {
+    !name.is_empty()
+        && !name
+            .chars()
+            .any(|c| c.is_whitespace() || "/$`'\"\\|&;()<>".contains(c))
 }
 
 #[cfg(test)]
@@ -47,5 +63,16 @@ mod tests {
         let out = run_with_aliases("alias", &["nope"], &ALIASES);
         assert_eq!(out.status, 1);
         assert!(out.stderr.contains("nope: not found"));
+    }
+
+    #[test]
+    fn rejects_names_that_could_never_expand() {
+        for bad in ["=ls", "my alias=ls", "a/b=ls", "$x=ls", "a|b=ls"] {
+            let out = run_with_aliases("alias", &[bad, "ok=ls", "ok"], &[]);
+            assert_eq!(out.status, 1, "{:?} was accepted", bad);
+            assert!(out.stderr.contains("invalid alias name"), "{}", out.stderr);
+            // The bad definition doesn't stop the rest of the line.
+            assert_eq!(out.stdout, "alias ok='ls'\n");
+        }
     }
 }
