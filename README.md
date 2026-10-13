@@ -113,7 +113,7 @@ Project Status
 
 ### Command Execution
 ```bash
-oxide> ls -la
+oxide> ls -a
 oxide> whoami
 oxide> date
 ```

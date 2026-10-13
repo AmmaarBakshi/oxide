@@ -3,14 +3,21 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use crate::args::parse_flags;
 use crate::{Ctx, Io};
 
 pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
-    // 1. Separate flags (starting with '-') from paths
-    let flags: Vec<&String> = args.iter().filter(|a| a.starts_with('-')).collect();
-    let paths: Vec<&String> = args.iter().filter(|a| !a.starts_with('-')).collect();
-
-    let show_all = flags.iter().any(|f| f.contains('a'));
+    // 1. Separate flags from paths
+    // `-1` asks for one name per line, which is the only format there is.
+    let (flags, paths) = match parse_flags(args, "a1") {
+        Ok(parsed) => parsed,
+        Err(msg) => {
+            ewln!(io, "oxide: ls: {}", msg);
+            ewln!(io, "Usage: ls [-a1] [path...]");
+            return 1;
+        }
+    };
+    let show_all = flags.contains('a');
 
     // 2. Sort operands: files are printed as given, directories are listed.
     // No operands means the current directory.
@@ -104,6 +111,24 @@ mod tests {
         let out = run("ls", &[sub, file], "");
         assert_eq!(out.status, 0, "{}", out.stderr);
         assert_eq!(out.stdout, format!("{}\n\n{}:\ninner.txt\n", file, sub));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn rejects_unknown_flags_and_honors_double_dash() {
+        let dir = scratch_dir("ls_flags");
+        fs::write(dir.join("-a"), "").unwrap();
+
+        let out = run("ls", &["-x"], "");
+        assert_eq!(out.status, 1);
+        assert!(out.stderr.starts_with("oxide: ls: invalid option -- 'x'"));
+
+        // A file named like a flag can be listed after `--`.
+        let flag_file = dir.join("-a");
+        let out = run("ls", &["--", flag_file.to_str().unwrap()], "");
+        assert_eq!(out.status, 0, "{}", out.stderr);
+        assert_eq!(out.stdout, format!("{}
+", flag_file.display()));
         fs::remove_dir_all(dir).unwrap();
     }
 
