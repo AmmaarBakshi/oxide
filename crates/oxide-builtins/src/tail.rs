@@ -52,6 +52,11 @@ fn parse_args(args: &[String]) -> Result<(Start, Vec<&str>), String> {
 
     let mut iter = args.iter();
     while let Some(arg) = iter.next() {
+        if arg == "--" {
+            // Everything after `--` is a file, even if it looks like a flag.
+            files.extend(iter.by_ref().map(String::as_str));
+            break;
+        }
         let value = if arg == "-n" {
             iter.next().ok_or("option requires an argument -- 'n'")?
         } else if let Some(value) = arg.strip_prefix("-n") {
@@ -148,6 +153,19 @@ mod tests {
     #[test]
     fn keeps_an_unterminated_last_line() {
         assert_eq!(run("tail", &["-n", "1"], "a\nb").stdout, "b");
+    }
+
+    #[test]
+    fn double_dash_ends_options() {
+        let out = run("tail", &["-n", "2", "--", "-"], TWELVE);
+        assert_eq!(out.status, 0, "{}", out.stderr);
+        assert_eq!(out.stdout, "11
+12
+");
+
+        let out = run("tail", &["--", "-5"], "");
+        assert_eq!(out.status, 1);
+        assert!(out.stderr.starts_with("tail: -5:"), "{}", out.stderr);
     }
 
     #[test]

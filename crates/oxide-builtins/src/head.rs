@@ -38,6 +38,11 @@ fn parse_args(args: &[String]) -> Result<(usize, Vec<&str>), String> {
 
     let mut iter = args.iter();
     while let Some(arg) = iter.next() {
+        if arg == "--" {
+            // Everything after `--` is a file, even if it looks like a flag.
+            files.extend(iter.by_ref().map(String::as_str));
+            break;
+        }
         let value = if arg == "-n" {
             iter.next().ok_or("option requires an argument -- 'n'")?
         } else if let Some(value) = arg.strip_prefix("-n") {
@@ -103,6 +108,19 @@ mod tests {
     #[test]
     fn short_input_is_passed_through_whole() {
         assert_eq!(run("head", &["-n", "5"], "a\nb").stdout, "a\nb");
+    }
+
+    #[test]
+    fn double_dash_ends_options() {
+        let out = run("head", &["-n", "2", "--", "-"], TWELVE);
+        assert_eq!(out.status, 0, "{}", out.stderr);
+        assert_eq!(out.stdout, "1
+2
+");
+
+        let out = run("head", &["--", "-5"], "");
+        assert_eq!(out.status, 1);
+        assert!(out.stderr.starts_with("head: -5:"), "{}", out.stderr);
     }
 
     #[test]
