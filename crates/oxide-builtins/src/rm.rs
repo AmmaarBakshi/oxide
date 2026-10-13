@@ -28,6 +28,13 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
     let mut status = 0;
     for arg in paths {
         let path = Path::new(arg);
+        // `rm -r .` would empty the working directory before failing on the
+        // directory itself, so refuse it up front as coreutils does.
+        if is_dot_or_dotdot(path) {
+            ewln!(io, "oxide: rm: refusing to remove '.' or '..' directory: skipping '{}'", arg);
+            status = 1;
+            continue;
+        }
         let result = if path.is_dir() {
             // Deleting a whole tree has to be asked for explicitly.
             if !recursive {
@@ -50,6 +57,18 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
         }
     }
     status
+}
+
+/// Whether the last component of `path` is `.` or `..` (`.`, `../..`, `dir/.`).
+/// `Path::components` normalizes a trailing `.` away, so the text is split by
+/// hand instead.
+fn is_dot_or_dotdot(path: &Path) -> bool {
+    let text = path.to_string_lossy();
+    let last = text
+        .trim_end_matches(std::path::is_separator)
+        .rsplit(std::path::is_separator)
+        .next();
+    matches!(last, Some("." | ".."))
 }
 
 #[cfg(test)]
@@ -83,6 +102,25 @@ mod tests {
 
         assert_eq!(run("rm", &["-r", sub.to_str().unwrap()], "").status, 0);
         assert!(!sub.exists());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn refuses_dot_and_dotdot_but_removes_the_rest() {
+        let dir = scratch_dir("rm_dot");
+        let sub = dir.join("sub");
+        fs::create_dir(&sub).unwrap();
+        fs::write(sub.join("keep.txt"), "x").unwrap();
+        let file = dir.join("a.txt");
+        fs::write(&file, "x").unwrap();
+
+        let dot = format!("{}/.", sub.to_str().unwrap());
+        let dotdot = format!("{}/../", sub.to_str().unwrap());
+        let out = run("rm", &["-rf", &dot, &dotdot, file.to_str().unwrap()], "");
+        assert_eq!(out.status, 1);
+        assert_eq!(out.stderr.matches("refusing to remove").count(), 2, "{}", out.stderr);
+        assert!(sub.join("keep.txt").exists());
+        assert!(!file.exists());
         fs::remove_dir_all(dir).unwrap();
     }
 
