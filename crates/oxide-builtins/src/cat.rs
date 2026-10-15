@@ -1,15 +1,26 @@
 use std::io;
 
+use crate::args::parse_flags;
 use crate::{Ctx, Io};
 
 pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
+    // cat takes no flags yet; parsing still reports a mistyped one and lets
+    // `--` pass a file whose name starts with `-`.
+    let (_, files) = match parse_flags(args, "") {
+        Ok(parsed) => parsed,
+        Err(msg) => {
+            ewln!(io, "cat: {}", msg);
+            ewln!(io, "Usage: cat [file...]");
+            return 1;
+        }
+    };
+
     // No operands (or `-`) means "copy stdin through", which is what makes
     // `cat < in.txt | grep foo` and a bare `cat` in a pipeline work.
     //
     // `io::copy` forwards each chunk as soon as it's read, so a long-running
     // upstream stage shows up as it arrives, large files never sit whole in
     // memory, and bytes that aren't valid UTF-8 pass through untouched.
-    let files: Vec<&str> = args.iter().map(String::as_str).collect();
     io.each_input("cat", &files, |_, input, out| io::copy(input, out).map(drop))
 }
 
@@ -36,5 +47,20 @@ mod tests {
         assert_eq!(out.stdout, "from a\n");
         assert!(out.stderr.starts_with("cat: "));
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn rejects_unknown_flags_and_honors_double_dash() {
+        let out = run("cat", &["-n"], "unread
+");
+        assert_eq!(out.status, 1);
+        assert_eq!(out.stdout, "");
+        assert!(out.stderr.starts_with("cat: invalid option -- 'n'"), "{}", out.stderr);
+
+        let out = run("cat", &["--", "-"], "after dashes
+");
+        assert_eq!(out.status, 0, "{}", out.stderr);
+        assert_eq!(out.stdout, "after dashes
+");
     }
 }
