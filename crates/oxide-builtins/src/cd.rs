@@ -4,6 +4,13 @@ use std::path::PathBuf;
 use crate::{Ctx, Io};
 
 pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
+    // Only one directory can be entered; going to the first and dropping the
+    // rest would hide a missing quote around a path with spaces.
+    if args.len() > 1 {
+        ewln!(io, "oxide: cd: too many arguments");
+        return 1;
+    }
+
     let back = args.first().map(String::as_str) == Some("-");
 
     // 1. Determine the target directory
@@ -44,5 +51,20 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
             ewln!(io, "oxide: cd: {}: {}", target.display(), e);
             1
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::test_support::run;
+
+    #[test]
+    fn rejects_more_than_one_directory() {
+        let before = std::env::current_dir().unwrap();
+        let out = run("cd", &["My", "Documents"], "");
+        assert_eq!(out.status, 1);
+        assert_eq!(out.stderr, "oxide: cd: too many arguments
+");
+        assert_eq!(std::env::current_dir().unwrap(), before);
     }
 }
