@@ -1,15 +1,26 @@
 use std::fs::OpenOptions;
 use std::time::SystemTime;
 
+use crate::args::parse_flags;
 use crate::{Ctx, Io};
 
 pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
-    if args.is_empty() {
+    // touch takes no flags yet, but parsing them keeps a mistyped option from
+    // quietly creating a file named after it, and `--` still allows one.
+    let (_, paths) = match parse_flags(args, "") {
+        Ok(parsed) => parsed,
+        Err(msg) => {
+            ewln!(io, "touch: {}", msg);
+            ewln!(io, "Usage: touch <file>...");
+            return 1;
+        }
+    };
+    if paths.is_empty() {
         ewln!(io, "touch: missing file operand");
         return 1;
     }
     let mut status = 0;
-    for path in args {
+    for path in paths {
         // Creates the file if it's missing; an existing one keeps its contents
         // but gets a fresh modification time, which is what build tools see.
         let result = OpenOptions::new()
@@ -58,6 +69,22 @@ mod tests {
         assert_eq!(out.status, 1);
         assert!(out.stderr.starts_with("touch: cannot touch"), "{}", out.stderr);
         assert!(good.is_file());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn rejects_unknown_flags_but_honors_double_dash() {
+        let dir = scratch_dir("touch_flags");
+        let flag_like = dir.join("-c");
+
+        let out = run("touch", &["-c", dir.join("x.txt").to_str().unwrap()], "");
+        assert_eq!(out.status, 1);
+        assert!(out.stderr.contains("invalid option -- 'c'"), "{}", out.stderr);
+        assert!(!dir.join("x.txt").exists());
+
+        let out = run("touch", &["--", flag_like.to_str().unwrap()], "");
+        assert_eq!(out.status, 0, "{}", out.stderr);
+        assert!(flag_like.is_file());
         fs::remove_dir_all(dir).unwrap();
     }
 }
