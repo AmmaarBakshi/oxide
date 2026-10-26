@@ -124,6 +124,7 @@ declare_builtins! {
     Ps     => "ps",     crate::ps::run,      "list running processes";
     Pwd    => "pwd",    crate::pwd::run,     "print the working directory";
     Read   => "read",   crate::read::run,    "read a line of stdin into variables (-r, -p)";
+    Realpath => "realpath", crate::realpath::run, "print the absolute, resolved form of paths";
     Rm     => "rm",     crate::rm::run,      "remove files and directories";
     Sleep  => "sleep",  crate::sleep::run,   "pause for a number of seconds";
     Sort   => "sort",   crate::sort::run,    "sort lines of files or stdin";

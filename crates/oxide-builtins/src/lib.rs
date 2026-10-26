@@ -45,6 +45,7 @@ pub mod printf;
 pub mod ps;
 pub mod pwd;
 pub mod read;
+pub mod realpath;
 pub mod rm;
 pub mod sleep;
 pub mod sort;
