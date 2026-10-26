@@ -26,6 +26,7 @@ pub mod cat;
 pub mod cd;
 pub mod clear;
 pub mod cp;
+pub mod dirname;
 pub mod echo;
 pub mod env;
 pub mod export;

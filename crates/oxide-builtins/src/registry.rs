@@ -104,6 +104,7 @@ declare_builtins! {
     Clear  => "clear",  crate::clear::run,   "clear the screen and scrollback";
     Cp     => "cp",     crate::cp::run,      "copy files and directories (-r)";
     Dir    => "dir",    crate::ls::run,      "list directory contents (alias for ls)";
+    Dirname => "dirname", crate::dirname::run, "strip the last component from a path";
     Echo   => "echo",   crate::echo::run,    "write arguments to stdout";
     Env    => "env",    crate::env::run,     "print the environment";
     Export => "export", crate::export::run,  "set an environment variable (KEY=VALUE)";
