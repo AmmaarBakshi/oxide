@@ -137,6 +137,7 @@ declare_builtins! {
     Test   => "test",   crate::test::run_test, "check files, strings and numbers (-f, =, -lt, ...)";
     Top    => "top",    crate::top::run,     "show the busiest processes";
     Touch  => "touch",  crate::touch::run,   "create files if they do not exist";
+    Tr     => "tr",     crate::tr::run,      "translate, delete (-d) or squeeze (-s) characters";
     True   => "true",   crate::truth::run_true,  "do nothing, successfully";
     Type   => "type",   crate::type_::run,   "say what a command name means (-a all, -t kind only)";
     Uniq   => "uniq",   crate::uniq::run,    "collapse adjacent duplicate lines";

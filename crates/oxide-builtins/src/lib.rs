@@ -58,6 +58,7 @@ pub mod tee;
 pub mod test;
 pub mod top;
 pub mod touch;
+pub mod tr;
 pub mod truth;
 pub mod type_;
 pub mod uniq;
