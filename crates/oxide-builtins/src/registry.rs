@@ -149,6 +149,7 @@ declare_builtins! {
     Unset  => "unset",  crate::unset::run,   "remove an environment variable";
     Wc     => "wc",     crate::wc::run,      "count lines, words, and bytes";
     Which  => "which",  crate::which::run,   "show what a command name runs (-a for all)";
+    Whoami => "whoami", crate::whoami::run,  "print the current user name";
 }
 
 /// The process-wide builtin registry, built once on first use.

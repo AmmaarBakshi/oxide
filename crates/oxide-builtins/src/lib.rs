@@ -70,6 +70,7 @@ pub mod uniq;
 pub mod unset;
 pub mod wc;
 pub mod which;
+pub mod whoami;
 
 #[cfg(test)]
 mod test_support;
