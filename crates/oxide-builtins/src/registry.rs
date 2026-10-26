@@ -131,6 +131,7 @@ declare_builtins! {
     Seq    => "seq",    crate::seq::run,     "print a sequence of numbers";
     Sleep  => "sleep",  crate::sleep::run,   "pause for a number of seconds";
     Sort   => "sort",   crate::sort::run,    "sort lines of files or stdin";
+    Tac    => "tac",    crate::tac::run,     "print lines last first";
     Tail   => "tail",   crate::tail::run,    "print the last lines of files or stdin";
     Tee    => "tee",    crate::tee::run,     "copy stdin to stdout and to files (-a append)";
     Test   => "test",   crate::test::run_test, "check files, strings and numbers (-f, =, -lt, ...)";

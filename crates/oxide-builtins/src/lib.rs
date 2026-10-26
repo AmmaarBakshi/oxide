@@ -52,6 +52,7 @@ pub mod rmdir;
 pub mod seq;
 pub mod sleep;
 pub mod sort;
+pub mod tac;
 pub mod tail;
 pub mod tee;
 pub mod test;
