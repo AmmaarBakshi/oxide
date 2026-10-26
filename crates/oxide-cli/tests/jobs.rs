@@ -106,3 +106,21 @@ fn wait_reports_unknown_jobs() {
         127,
     );
 }
+
+#[test]
+fn disown_drops_a_job_from_the_table() {
+    run_c(
+        "disown",
+        "\"$OXIDE_BIN\" -c 'sleep 2' >/dev/null 2>&1 & \"$OXIDE_BIN\" -c 'sleep 2' >/dev/null 2>&1 & disown; jobs; disown -a; jobs; wait; echo waited for nothing",
+    )
+    .assert_ok("[1]+  Running                 \"$OXIDE_BIN\" -c 'sleep 2' &\nwaited for nothing\n");
+}
+
+#[test]
+fn disown_reports_missing_jobs() {
+    run_c("disown-missing", "disown; disown %4").assert(
+        "",
+        "oxide: disown: current: no such job\noxide: disown: %4: no such job\n",
+        1,
+    );
+}

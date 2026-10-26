@@ -105,8 +105,8 @@ pub struct Ctx<'a> {
 /// depending on `oxide-exec`. `oxide-exec` has a test asserting it really
 /// handles every name in this list.
 pub const EXECUTOR_BUILTINS: &[&str] = &[
-    "break", "call", "continue", "exit", "import", "jail", "jobs", "local", "mode", "refresh",
-    "return", "set", "source", "wait",
+    "break", "call", "continue", "disown", "exit", "import", "jail", "jobs", "local", "mode",
+    "refresh", "return", "set", "source", "wait",
 ];
 
 /// Every name Oxide handles internally, from both tiers.

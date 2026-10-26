@@ -159,6 +159,23 @@ impl JobManager {
         }
     }
 
+    /// The job a builtin like `fg` or `disown` acts on: the one `spec`
+    /// names, or the current job when there is no spec. The error is the
+    /// message to show after `oxide: <builtin>: `.
+    pub fn resolve(&self, spec: Option<&str>) -> Result<usize, String> {
+        let spec = spec.unwrap_or("%+");
+        self.find(spec).ok_or_else(|| match spec {
+            "%+" => "current: no such job".to_string(),
+            _ => format!("{}: no such job", spec),
+        })
+    }
+
+    /// Takes a job out of the table without touching its processes, which
+    /// carry on running unwatched.
+    pub fn forget(&mut self, index: usize) -> Job {
+        self.jobs.remove(index)
+    }
+
     /// Blocks until every process of the job at `index` has exited, then
     /// takes the job out of the table and returns its status.
     pub fn wait_for(&mut self, index: usize) -> i32 {

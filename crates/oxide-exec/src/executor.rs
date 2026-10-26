@@ -129,6 +129,7 @@ enum ExecutorBuiltin {
     Set,
     Source,
     Wait,
+    Disown,
 }
 
 impl ExecutorBuiltin {
@@ -147,6 +148,7 @@ impl ExecutorBuiltin {
             "return" => Self::Return,
             "set" => Self::Set,
             "source" => Self::Source,
+            "disown" => Self::Disown,
             "wait" => Self::Wait,
             _ => return None,
         })
@@ -1056,6 +1058,32 @@ impl Executor {
                             127
                         }
                     };
+                }
+                status
+            }
+
+            ExecutorBuiltin::Disown => {
+                let jobs = &mut *env.job_manager;
+                if args.first().map(String::as_str) == Some("-a") {
+                    jobs.jobs.clear();
+                    return 0;
+                }
+                let specs: Vec<Option<&str>> = if args.is_empty() {
+                    vec![None]
+                } else {
+                    args.iter().map(|spec| Some(spec.as_str())).collect()
+                };
+                let mut status = 0;
+                for spec in specs {
+                    match jobs.resolve(spec) {
+                        Ok(index) => {
+                            jobs.forget(index);
+                        }
+                        Err(message) => {
+                            shell_error!("oxide: disown: {}", message);
+                            status = 1;
+                        }
+                    }
                 }
                 status
             }
