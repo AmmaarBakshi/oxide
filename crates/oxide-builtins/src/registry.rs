@@ -125,6 +125,7 @@ declare_builtins! {
     Pwd    => "pwd",    crate::pwd::run,     "print the working directory";
     Read   => "read",   crate::read::run,    "read a line of stdin into variables (-r, -p)";
     Realpath => "realpath", crate::realpath::run, "print the absolute, resolved form of paths";
+    Rev    => "rev",    crate::rev::run,     "reverse the characters of each line";
     Rm     => "rm",     crate::rm::run,      "remove files and directories";
     Rmdir  => "rmdir",  crate::rmdir::run,   "remove empty directories (-p parents too)";
     Seq    => "seq",    crate::seq::run,     "print a sequence of numbers";

@@ -46,6 +46,7 @@ pub mod ps;
 pub mod pwd;
 pub mod read;
 pub mod realpath;
+pub mod rev;
 pub mod rm;
 pub mod rmdir;
 pub mod seq;
