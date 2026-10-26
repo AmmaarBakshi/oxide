@@ -32,6 +32,7 @@ pub mod echo;
 pub mod env;
 pub mod export;
 pub mod find;
+pub mod fold;
 pub mod grep;
 pub mod head;
 pub mod help;

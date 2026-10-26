@@ -111,6 +111,7 @@ declare_builtins! {
     Export => "export", crate::export::run,  "set an environment variable (KEY=VALUE)";
     False  => "false",  crate::truth::run_false, "do nothing, unsuccessfully";
     Find   => "find",   crate::find::run,    "search a directory tree for matching names";
+    Fold   => "fold",   crate::fold::run,    "wrap lines to a width (-w), breaking at spaces with -s";
     Grep   => "grep",   crate::grep::run,    "print lines matching a pattern";
     Head   => "head",   crate::head::run,    "print the first lines of files or stdin";
     Help   => "help",   crate::help::run,    "list the built-in commands";
