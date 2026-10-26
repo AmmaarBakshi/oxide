@@ -41,6 +41,7 @@ pub mod let_;
 pub mod ls;
 pub mod mkdir;
 pub mod mv;
+pub mod nl;
 pub mod open;
 pub mod printf;
 pub mod ps;

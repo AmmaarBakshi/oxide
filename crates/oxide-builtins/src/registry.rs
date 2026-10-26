@@ -120,6 +120,7 @@ declare_builtins! {
     Ls     => "ls",     crate::ls::run,      "list directory contents";
     Mkdir  => "mkdir",  crate::mkdir::run,   "create directories";
     Mv     => "mv",     crate::mv::run,      "move or rename files and directories";
+    Nl     => "nl",     crate::nl::run,      "number the lines of files or stdin";
     Open   => "open",   crate::open::run,    "read a file, parsing JSON and CSV structurally";
     Printf => "printf", crate::printf::run,  "print arguments according to a format";
     Ps     => "ps",     crate::ps::run,      "list running processes";
