@@ -52,6 +52,7 @@ pub mod seq;
 pub mod sleep;
 pub mod sort;
 pub mod tail;
+pub mod tee;
 pub mod test;
 pub mod top;
 pub mod touch;
