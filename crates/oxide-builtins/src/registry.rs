@@ -103,6 +103,7 @@ declare_builtins! {
     Cd     => "cd",     crate::cd::run,      "change the working directory";
     Clear  => "clear",  crate::clear::run,   "clear the screen and scrollback";
     Cp     => "cp",     crate::cp::run,      "copy files and directories (-r)";
+    Cut    => "cut",    crate::cut::run,     "print selected fields (-f) or characters (-c) of lines";
     Dir    => "dir",    crate::ls::run,      "list directory contents (alias for ls)";
     Dirname => "dirname", crate::dirname::run, "strip the last component from a path";
     Echo   => "echo",   crate::echo::run,    "write arguments to stdout";
