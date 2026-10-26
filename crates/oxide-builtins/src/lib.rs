@@ -48,6 +48,7 @@ pub mod read;
 pub mod realpath;
 pub mod rm;
 pub mod rmdir;
+pub mod seq;
 pub mod sleep;
 pub mod sort;
 pub mod tail;

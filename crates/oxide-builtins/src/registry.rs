@@ -127,6 +127,7 @@ declare_builtins! {
     Realpath => "realpath", crate::realpath::run, "print the absolute, resolved form of paths";
     Rm     => "rm",     crate::rm::run,      "remove files and directories";
     Rmdir  => "rmdir",  crate::rmdir::run,   "remove empty directories (-p parents too)";
+    Seq    => "seq",    crate::seq::run,     "print a sequence of numbers";
     Sleep  => "sleep",  crate::sleep::run,   "pause for a number of seconds";
     Sort   => "sort",   crate::sort::run,    "sort lines of files or stdin";
     Tail   => "tail",   crate::tail::run,    "print the last lines of files or stdin";
