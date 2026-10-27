@@ -49,6 +49,7 @@ pub mod nl;
 pub mod nproc;
 pub mod open;
 pub mod paste;
+pub mod printenv;
 pub mod printf;
 pub mod ps;
 pub mod pwd;

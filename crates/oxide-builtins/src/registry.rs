@@ -128,6 +128,7 @@ declare_builtins! {
     Nproc  => "nproc",  crate::nproc::run,   "print the number of processors available (--ignore N)";
     Open   => "open",   crate::open::run,    "read a file, parsing JSON and CSV structurally";
     Paste  => "paste",  crate::paste::run,   "join lines of files side by side (-s one file per line)";
+    Printenv => "printenv", crate::printenv::run, "print environment variables, or the values of those named";
     Printf => "printf", crate::printf::run,  "print arguments according to a format";
     Ps     => "ps",     crate::ps::run,      "list running processes";
     Pwd    => "pwd",    crate::pwd::run,     "print the working directory";
