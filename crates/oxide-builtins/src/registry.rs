@@ -109,6 +109,7 @@ declare_builtins! {
     Dirname => "dirname", crate::dirname::run, "strip the last component from a path";
     Echo   => "echo",   crate::echo::run,    "write arguments to stdout";
     Env    => "env",    crate::env::run,     "print the environment";
+    Expand => "expand", crate::expand::run,  "convert tabs to spaces (-t size, -i leading only)";
     Export => "export", crate::export::run,  "set an environment variable (KEY=VALUE)";
     False  => "false",  crate::truth::run_false, "do nothing, unsuccessfully";
     Find   => "find",   crate::find::run,    "search a directory tree for matching names";

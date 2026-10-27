@@ -31,6 +31,7 @@ pub mod cut;
 pub mod dirname;
 pub mod echo;
 pub mod env;
+pub mod expand;
 pub mod export;
 pub mod find;
 pub mod fold;
