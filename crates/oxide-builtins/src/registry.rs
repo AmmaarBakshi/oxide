@@ -118,6 +118,7 @@ declare_builtins! {
     Head   => "head",   crate::head::run,    "print the first lines of files or stdin";
     Help   => "help",   crate::help::run,    "list the built-in commands";
     Hist   => "history", crate::history::run, "show the command history";
+    Hostname => "hostname", crate::hostname::run, "print the host name (-s without the domain)";
     Kill   => "kill",   crate::kill::run,    "terminate a process by PID";
     Let    => "let",    crate::let_::run,    "evaluate arithmetic, assigning variables (let x=x+1)";
     Ls     => "ls",     crate::ls::run,      "list directory contents";

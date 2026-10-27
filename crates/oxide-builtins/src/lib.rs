@@ -39,6 +39,7 @@ pub mod grep;
 pub mod head;
 pub mod help;
 pub mod history;
+pub mod hostname;
 pub mod kill;
 pub mod let_;
 pub mod ls;
