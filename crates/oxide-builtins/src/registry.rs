@@ -125,6 +125,7 @@ declare_builtins! {
     Mkdir  => "mkdir",  crate::mkdir::run,   "create directories";
     Mv     => "mv",     crate::mv::run,      "move or rename files and directories";
     Nl     => "nl",     crate::nl::run,      "number the lines of files or stdin";
+    Nproc  => "nproc",  crate::nproc::run,   "print the number of processors available (--ignore N)";
     Open   => "open",   crate::open::run,    "read a file, parsing JSON and CSV structurally";
     Paste  => "paste",  crate::paste::run,   "join lines of files side by side (-s one file per line)";
     Printf => "printf", crate::printf::run,  "print arguments according to a format";
