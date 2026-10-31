@@ -153,6 +153,7 @@ declare_builtins! {
     Touch  => "touch",  crate::touch::run,   "create files if they do not exist";
     Tr     => "tr",     crate::tr::run,      "translate, delete (-d) or squeeze (-s) characters";
     True   => "true",   crate::truth::run_true,  "do nothing, successfully";
+    Truncate => "truncate", crate::truncate::run, "shrink or extend files to a size (-s [+-<>]N, -c no create)";
     Type   => "type",   crate::type_::run,   "say what a command name means (-a all, -t kind only)";
     Unalias => "unalias", crate::unalias::run, "remove command aliases (-a all)";
     Unexpand => "unexpand", crate::unexpand::run, "convert leading spaces to tabs (-a all, -t size)";

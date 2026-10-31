@@ -73,6 +73,7 @@ pub mod test;
 pub mod top;
 pub mod touch;
 pub mod tr;
+pub mod truncate;
 pub mod truth;
 pub mod type_;
 pub mod unalias;
