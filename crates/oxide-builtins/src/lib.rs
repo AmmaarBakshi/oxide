@@ -79,6 +79,7 @@ pub mod type_;
 pub mod unalias;
 pub mod unexpand;
 pub mod uniq;
+pub mod unlink;
 pub mod unset;
 pub mod wc;
 pub mod which;
