@@ -70,6 +70,7 @@ pub mod rmdir;
 pub mod seq;
 pub mod sleep;
 pub mod sort;
+pub mod strings;
 pub mod tac;
 pub mod tail;
 pub mod tee;
