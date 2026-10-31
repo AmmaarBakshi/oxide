@@ -102,6 +102,7 @@ declare_builtins! {
     Basename => "basename", crate::basename::run, "strip the directory (and a suffix) from a path";
     Cat    => "cat",    crate::cat::run,     "concatenate files, or stdin, to stdout";
     Cd     => "cd",     crate::cd::run,      "change the working directory";
+    Cksum  => "cksum",  crate::cksum::run,   "print the POSIX CRC checksum and size of files";
     Clear  => "clear",  crate::clear::run,   "clear the screen and scrollback";
     Cmp    => "cmp",    crate::cmp::run,     "compare two files byte by byte (-s status only)";
     Column => "column", crate::column::run,  "arrange lines in columns, or a table with -t (-s -o -c -x)";

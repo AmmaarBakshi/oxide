@@ -25,6 +25,7 @@ pub mod basename;
 pub mod bind;
 pub mod cat;
 pub mod cd;
+pub mod cksum;
 pub mod clear;
 pub mod cmp;
 pub mod column;
