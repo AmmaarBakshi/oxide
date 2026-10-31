@@ -46,6 +46,7 @@ pub mod head;
 pub mod help;
 pub mod history;
 pub mod hostname;
+pub mod join;
 pub mod kill;
 pub mod let_;
 pub mod ln;

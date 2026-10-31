@@ -125,6 +125,7 @@ declare_builtins! {
     Help   => "help",   crate::help::run,    "list the built-in commands";
     Hist   => "history", crate::history::run, "show the command history";
     Hostname => "hostname", crate::hostname::run, "print the host name (-s without the domain)";
+    Join   => "join",   crate::join::run,    "join lines of two sorted files on a common field (-t -1 -2 -a -v)";
     Kill   => "kill",   crate::kill::run,    "terminate a process by PID";
     Let    => "let",    crate::let_::run,    "evaluate arithmetic, assigning variables (let x=x+1)";
     Ln     => "ln",     crate::ln::run,      "make hard links, or symbolic links with -s (-f replace)";
