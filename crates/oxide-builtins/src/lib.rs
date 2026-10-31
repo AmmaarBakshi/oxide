@@ -27,6 +27,7 @@ pub mod cat;
 pub mod cd;
 pub mod clear;
 pub mod cmp;
+pub mod column;
 pub mod comm;
 pub mod cp;
 pub mod cut;

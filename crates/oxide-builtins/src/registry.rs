@@ -104,6 +104,7 @@ declare_builtins! {
     Cd     => "cd",     crate::cd::run,      "change the working directory";
     Clear  => "clear",  crate::clear::run,   "clear the screen and scrollback";
     Cmp    => "cmp",    crate::cmp::run,     "compare two files byte by byte (-s status only)";
+    Column => "column", crate::column::run,  "arrange lines in columns, or a table with -t (-s -o -c -x)";
     Comm   => "comm",   crate::comm::run,    "compare two sorted files line by line (-1, -2, -3 hide columns)";
     Cp     => "cp",     crate::cp::run,      "copy files and directories (-r)";
     Cut    => "cut",    crate::cut::run,     "print selected fields (-f) or characters (-c) of lines";
