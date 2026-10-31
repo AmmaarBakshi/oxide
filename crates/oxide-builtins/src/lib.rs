@@ -32,6 +32,7 @@ pub mod cp;
 pub mod cut;
 pub mod df;
 pub mod dirname;
+pub mod du;
 pub mod echo;
 pub mod env;
 pub mod expand;

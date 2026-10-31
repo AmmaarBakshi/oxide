@@ -110,6 +110,7 @@ declare_builtins! {
     Df     => "df",     crate::df::run,      "show free disk space on each file system (-h human, -T type)";
     Dir    => "dir",    crate::ls::run,      "list directory contents (alias for ls)";
     Dirname => "dirname", crate::dirname::run, "strip the last component from a path";
+    Du     => "du",     crate::du::run,      "show the space used under directories (-s -a -c -h, -b bytes)";
     Echo   => "echo",   crate::echo::run,    "write arguments to stdout";
     Env    => "env",    crate::env::run,     "print the environment";
     Expand => "expand", crate::expand::run,  "convert tabs to spaces (-t size, -i leading only)";
