@@ -137,6 +137,7 @@ declare_builtins! {
     Ps     => "ps",     crate::ps::run,      "list running processes";
     Pwd    => "pwd",    crate::pwd::run,     "print the working directory";
     Read   => "read",   crate::read::run,    "read a line of stdin into variables (-r, -p)";
+    Readlink => "readlink", crate::readlink::run, "print where a symlink points (-f fully resolved)";
     Realpath => "realpath", crate::realpath::run, "print the absolute, resolved form of paths";
     Rev    => "rev",    crate::rev::run,     "reverse the characters of each line";
     Rm     => "rm",     crate::rm::run,      "remove files and directories";

@@ -33,7 +33,7 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
 
 /// Drops the `\\?\` prefix Windows puts on canonical paths, which nothing
 /// else in the shell prints and most programs don't accept back.
-fn display(path: PathBuf) -> String {
+pub(crate) fn display(path: PathBuf) -> String {
     let text = path.to_string_lossy();
     if let Some(unc) = text.strip_prefix(r"\\?\UNC\") {
         format!(r"\\{}", unc)

@@ -58,6 +58,7 @@ pub mod printf;
 pub mod ps;
 pub mod pwd;
 pub mod read;
+pub mod readlink;
 pub mod realpath;
 pub mod rev;
 pub mod rm;
