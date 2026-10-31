@@ -157,6 +157,7 @@ declare_builtins! {
     Truncate => "truncate", crate::truncate::run, "shrink or extend files to a size (-s [+-<>]N, -c no create)";
     Type   => "type",   crate::type_::run,   "say what a command name means (-a all, -t kind only)";
     Unalias => "unalias", crate::unalias::run, "remove command aliases (-a all)";
+    Uname  => "uname",  crate::uname::run,   "print system information (-a all, -s -n -r -v -m -o)";
     Unexpand => "unexpand", crate::unexpand::run, "convert leading spaces to tabs (-a all, -t size)";
     Uniq   => "uniq",   crate::uniq::run,    "collapse adjacent duplicate lines";
     Unlink => "unlink", crate::unlink::run,  "remove a single file";

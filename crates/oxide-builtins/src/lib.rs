@@ -78,6 +78,7 @@ pub mod truncate;
 pub mod truth;
 pub mod type_;
 pub mod unalias;
+pub mod uname;
 pub mod unexpand;
 pub mod uniq;
 pub mod unlink;
