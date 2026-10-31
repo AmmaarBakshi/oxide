@@ -83,6 +83,7 @@ pub mod unexpand;
 pub mod uniq;
 pub mod unlink;
 pub mod unset;
+pub mod uptime;
 pub mod wc;
 pub mod which;
 pub mod whoami;

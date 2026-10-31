@@ -162,6 +162,7 @@ declare_builtins! {
     Uniq   => "uniq",   crate::uniq::run,    "collapse adjacent duplicate lines";
     Unlink => "unlink", crate::unlink::run,  "remove a single file";
     Unset  => "unset",  crate::unset::run,   "remove an environment variable";
+    Uptime => "uptime", crate::uptime::run,  "show how long the system has been running (-p pretty)";
     Wc     => "wc",     crate::wc::run,      "count lines, words, and bytes";
     Which  => "which",  crate::which::run,   "show what a command name runs (-a for all)";
     Whoami => "whoami", crate::whoami::run,  "print the current user name";
