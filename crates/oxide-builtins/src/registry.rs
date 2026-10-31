@@ -117,6 +117,7 @@ declare_builtins! {
     False  => "false",  crate::truth::run_false, "do nothing, unsuccessfully";
     Find   => "find",   crate::find::run,    "search a directory tree for matching names";
     Fold   => "fold",   crate::fold::run,    "wrap lines to a width (-w), breaking at spaces with -s";
+    Free   => "free",   crate::free::run,    "show memory and swap usage (-b -k -m -g bytes/units, -h human)";
     Grep   => "grep",   crate::grep::run,    "print lines matching a pattern";
     Head   => "head",   crate::head::run,    "print the first lines of files or stdin";
     Help   => "help",   crate::help::run,    "list the built-in commands";

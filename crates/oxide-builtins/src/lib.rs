@@ -38,6 +38,7 @@ pub mod export;
 pub mod factor;
 pub mod find;
 pub mod fold;
+pub mod free;
 pub mod grep;
 pub mod head;
 pub mod help;
