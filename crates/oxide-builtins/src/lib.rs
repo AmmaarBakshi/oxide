@@ -81,6 +81,7 @@ pub mod touch;
 pub mod tr;
 pub mod truncate;
 pub mod truth;
+pub mod tsort;
 pub mod type_;
 pub mod unalias;
 pub mod uname;

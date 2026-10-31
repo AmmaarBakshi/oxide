@@ -160,6 +160,7 @@ declare_builtins! {
     Tr     => "tr",     crate::tr::run,      "translate, delete (-d) or squeeze (-s) characters";
     True   => "true",   crate::truth::run_true,  "do nothing, successfully";
     Truncate => "truncate", crate::truncate::run, "shrink or extend files to a size (-s [+-<>]N, -c no create)";
+    Tsort  => "tsort",  crate::tsort::run,   "sort items so each follows those it depends on";
     Type   => "type",   crate::type_::run,   "say what a command name means (-a all, -t kind only)";
     Unalias => "unalias", crate::unalias::run, "remove command aliases (-a all)";
     Uname  => "uname",  crate::uname::run,   "print system information (-a all, -s -n -r -v -m -o)";
