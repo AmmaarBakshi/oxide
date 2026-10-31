@@ -112,6 +112,7 @@ declare_builtins! {
     Env    => "env",    crate::env::run,     "print the environment";
     Expand => "expand", crate::expand::run,  "convert tabs to spaces (-t size, -i leading only)";
     Export => "export", crate::export::run,  "set an environment variable (KEY=VALUE)";
+    Factor => "factor", crate::factor::run,  "print the prime factors of numbers";
     False  => "false",  crate::truth::run_false, "do nothing, unsuccessfully";
     Find   => "find",   crate::find::run,    "search a directory tree for matching names";
     Fold   => "fold",   crate::fold::run,    "wrap lines to a width (-w), breaking at spaces with -s";

@@ -34,6 +34,7 @@ pub mod echo;
 pub mod env;
 pub mod expand;
 pub mod export;
+pub mod factor;
 pub mod find;
 pub mod fold;
 pub mod grep;
