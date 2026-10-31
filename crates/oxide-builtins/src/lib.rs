@@ -30,6 +30,7 @@ pub mod cmp;
 pub mod comm;
 pub mod cp;
 pub mod cut;
+pub mod df;
 pub mod dirname;
 pub mod echo;
 pub mod env;

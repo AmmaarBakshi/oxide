@@ -107,6 +107,7 @@ declare_builtins! {
     Comm   => "comm",   crate::comm::run,    "compare two sorted files line by line (-1, -2, -3 hide columns)";
     Cp     => "cp",     crate::cp::run,      "copy files and directories (-r)";
     Cut    => "cut",    crate::cut::run,     "print selected fields (-f) or characters (-c) of lines";
+    Df     => "df",     crate::df::run,      "show free disk space on each file system (-h human, -T type)";
     Dir    => "dir",    crate::ls::run,      "list directory contents (alias for ls)";
     Dirname => "dirname", crate::dirname::run, "strip the last component from a path";
     Echo   => "echo",   crate::echo::run,    "write arguments to stdout";
