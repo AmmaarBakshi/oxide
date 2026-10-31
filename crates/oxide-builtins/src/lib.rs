@@ -72,6 +72,7 @@ pub mod seq;
 pub mod shuf;
 pub mod sleep;
 pub mod sort;
+pub mod split;
 pub mod strings;
 pub mod tac;
 pub mod tail;

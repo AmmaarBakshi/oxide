@@ -151,6 +151,7 @@ declare_builtins! {
     Shuf   => "shuf",   crate::shuf::run,    "print lines in random order (-n count, -e words, -i LO-HI)";
     Sleep  => "sleep",  crate::sleep::run,   "pause for a number of seconds";
     Sort   => "sort",   crate::sort::run,    "sort lines of files or stdin";
+    Split  => "split",  crate::split::run,   "split a file into pieces (-l lines, -b bytes, -a -d suffixes)";
     Strings => "strings", crate::strings::run, "print the printable text in binary files (-n min length)";
     Tac    => "tac",    crate::tac::run,     "print lines last first";
     Tail   => "tail",   crate::tail::run,    "print the last lines of files or stdin";
