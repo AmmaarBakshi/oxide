@@ -147,6 +147,7 @@ declare_builtins! {
     Rm     => "rm",     crate::rm::run,      "remove files and directories";
     Rmdir  => "rmdir",  crate::rmdir::run,   "remove empty directories (-p parents too)";
     Seq    => "seq",    crate::seq::run,     "print a sequence of numbers";
+    Shuf   => "shuf",   crate::shuf::run,    "print lines in random order (-n count, -e words, -i LO-HI)";
     Sleep  => "sleep",  crate::sleep::run,   "pause for a number of seconds";
     Sort   => "sort",   crate::sort::run,    "sort lines of files or stdin";
     Strings => "strings", crate::strings::run, "print the printable text in binary files (-n min length)";

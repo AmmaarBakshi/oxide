@@ -68,6 +68,7 @@ pub mod rev;
 pub mod rm;
 pub mod rmdir;
 pub mod seq;
+pub mod shuf;
 pub mod sleep;
 pub mod sort;
 pub mod strings;

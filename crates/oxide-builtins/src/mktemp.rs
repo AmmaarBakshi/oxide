@@ -110,7 +110,7 @@ fn create(template: &Path, directory: bool) -> io::Result<PathBuf> {
     }
     let prefix = &name[..name.len() - xs];
 
-    let mut rng = SplitMix64(RandomState::new().build_hasher().finish());
+    let mut rng = SplitMix64::seeded();
     for _ in 0..ATTEMPTS {
         let random: String = (0..xs)
             .map(|_| NAME_CHARS[(rng.next_u64() % NAME_CHARS.len() as u64) as usize] as char)
@@ -138,12 +138,18 @@ fn create(template: &Path, directory: bool) -> io::Result<PathBuf> {
 }
 
 /// A small, fast generator. Seeded from `RandomState`, which std keys from
-/// the OS's random source, it is unpredictable enough for picking names:
-/// exclusive creation, not secrecy, is what keeps two callers apart.
-struct SplitMix64(u64);
+/// the OS's random source, it is unpredictable enough for picking names
+/// (exclusive creation, not secrecy, is what keeps two callers apart) or
+/// shuffling lines. It is not for anything that needs to stay secret.
+pub(crate) struct SplitMix64(u64);
 
 impl SplitMix64 {
-    fn next_u64(&mut self) -> u64 {
+    /// A generator with a fresh seed every time.
+    pub(crate) fn seeded() -> Self {
+        Self(RandomState::new().build_hasher().finish())
+    }
+
+    pub(crate) fn next_u64(&mut self) -> u64 {
         self.0 = self.0.wrapping_add(0x9e37_79b9_7f4a_7c15);
         let mut z = self.0;
         z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
