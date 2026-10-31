@@ -71,6 +71,7 @@ pub mod tr;
 pub mod truth;
 pub mod type_;
 pub mod unalias;
+pub mod unexpand;
 pub mod uniq;
 pub mod unset;
 pub mod wc;

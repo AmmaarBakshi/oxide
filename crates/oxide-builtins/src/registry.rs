@@ -150,6 +150,7 @@ declare_builtins! {
     True   => "true",   crate::truth::run_true,  "do nothing, successfully";
     Type   => "type",   crate::type_::run,   "say what a command name means (-a all, -t kind only)";
     Unalias => "unalias", crate::unalias::run, "remove command aliases (-a all)";
+    Unexpand => "unexpand", crate::unexpand::run, "convert leading spaces to tabs (-a all, -t size)";
     Uniq   => "uniq",   crate::uniq::run,    "collapse adjacent duplicate lines";
     Unset  => "unset",  crate::unset::run,   "remove an environment variable";
     Wc     => "wc",     crate::wc::run,      "count lines, words, and bytes";
