@@ -124,6 +124,7 @@ declare_builtins! {
     Hostname => "hostname", crate::hostname::run, "print the host name (-s without the domain)";
     Kill   => "kill",   crate::kill::run,    "terminate a process by PID";
     Let    => "let",    crate::let_::run,    "evaluate arithmetic, assigning variables (let x=x+1)";
+    Ln     => "ln",     crate::ln::run,      "make hard links, or symbolic links with -s (-f replace)";
     Ls     => "ls",     crate::ls::run,      "list directory contents";
     Mkdir  => "mkdir",  crate::mkdir::run,   "create directories";
     Mv     => "mv",     crate::mv::run,      "move or rename files and directories";

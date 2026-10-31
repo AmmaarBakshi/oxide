@@ -45,6 +45,7 @@ pub mod history;
 pub mod hostname;
 pub mod kill;
 pub mod let_;
+pub mod ln;
 pub mod ls;
 pub mod mkdir;
 pub mod mv;
