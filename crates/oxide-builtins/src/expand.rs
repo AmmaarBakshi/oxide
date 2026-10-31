@@ -79,7 +79,7 @@ fn expand(
             match c {
                 '\t' if leading || !initial_only => {
                     let spaces = tab - column % tab;
-                    expanded.extend(std::iter::repeat(' ').take(spaces));
+                    expanded.extend(std::iter::repeat_n(' ', spaces));
                     column += spaces;
                 }
                 '\r' | '\n' => {
