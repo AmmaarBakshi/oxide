@@ -127,6 +127,7 @@ declare_builtins! {
     Ln     => "ln",     crate::ln::run,      "make hard links, or symbolic links with -s (-f replace)";
     Ls     => "ls",     crate::ls::run,      "list directory contents";
     Mkdir  => "mkdir",  crate::mkdir::run,   "create directories";
+    Mktemp => "mktemp", crate::mktemp::run,  "create a uniquely named temporary file (-d directory)";
     Mv     => "mv",     crate::mv::run,      "move or rename files and directories";
     Nl     => "nl",     crate::nl::run,      "number the lines of files or stdin";
     Nproc  => "nproc",  crate::nproc::run,   "print the number of processors available (--ignore N)";

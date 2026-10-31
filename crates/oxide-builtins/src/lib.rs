@@ -48,6 +48,7 @@ pub mod let_;
 pub mod ln;
 pub mod ls;
 pub mod mkdir;
+pub mod mktemp;
 pub mod mv;
 pub mod nl;
 pub mod nproc;
