@@ -78,6 +78,7 @@ pub mod sleep;
 pub mod sort;
 pub mod split;
 pub mod strings;
+pub mod sum;
 pub mod tac;
 pub mod tail;
 pub mod tee;

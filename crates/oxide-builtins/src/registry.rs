@@ -157,6 +157,7 @@ declare_builtins! {
     Sort   => "sort",   crate::sort::run,    "sort lines of files or stdin";
     Split  => "split",  crate::split::run,   "split a file into pieces (-l lines, -b bytes, -a -d suffixes)";
     Strings => "strings", crate::strings::run, "print the printable text in binary files (-n min length)";
+    Sum    => "sum",    crate::sum::run,     "print BSD (-r) or System V (-s) checksums and block counts";
     Tac    => "tac",    crate::tac::run,     "print lines last first";
     Tail   => "tail",   crate::tail::run,    "print the last lines of files or stdin";
     Tee    => "tee",    crate::tee::run,     "copy stdin to stdout and to files (-a append)";
