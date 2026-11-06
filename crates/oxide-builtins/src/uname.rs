@@ -43,7 +43,7 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
 /// - `v`: operating system version
 /// - `m`: machine hardware name
 /// - `o`: operating system, by its full name
-fn field(flag: char) -> String {
+pub(crate) fn field(flag: char) -> String {
     let value = match flag {
         's' => Some(kernel_name().to_string()),
         'n' => System::host_name(),

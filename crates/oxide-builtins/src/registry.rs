@@ -98,6 +98,7 @@ declare_builtins! {
     Bracket => "[",     crate::test::run_bracket, "evaluate a test expression: [ EXPR ]";
     Colon  => ":",      crate::truth::run_true,  "do nothing, successfully";
     Alias  => "alias",  crate::alias::run,   "define or list command aliases";
+    Arch   => "arch",   crate::arch::run,    "print the machine hardware name (same as uname -m)";
     Base64 => "base64", crate::base64::run,  "encode or decode (-d) base64, wrapping at -w columns";
     Basename => "basename", crate::basename::run, "strip the directory (and a suffix) from a path";
     Cat    => "cat",    crate::cat::run,     "concatenate files, or stdin, to stdout";

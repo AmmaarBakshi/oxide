@@ -20,6 +20,7 @@ pub mod io;
 pub mod registry;
 
 pub mod alias;
+pub mod arch;
 pub mod base64;
 pub mod basename;
 pub mod bind;
