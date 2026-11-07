@@ -28,7 +28,7 @@ pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
     })
 }
 
-fn parse_args(args: &[String]) -> Result<(bool, usize, Vec<&str>), String> {
+pub(crate) fn parse_args(args: &[String]) -> Result<(bool, usize, Vec<&str>), String> {
     let mut decoding = false;
     let mut wrap = DEFAULT_WRAP;
     let mut files = Vec::new();
@@ -129,7 +129,7 @@ fn decode(text: &[u8]) -> Option<Vec<u8>> {
 /// Writes `text` in lines of `cols` characters. A width of 0 means one
 /// unbroken run with no newline at all, which is what makes `-w 0` handy
 /// for putting an encoding inside another command.
-fn write_wrapped(out: &mut dyn Write, text: &str, cols: usize) -> io::Result<()> {
+pub(crate) fn write_wrapped(out: &mut dyn Write, text: &str, cols: usize) -> io::Result<()> {
     if cols == 0 {
         return out.write_all(text.as_bytes());
     }
