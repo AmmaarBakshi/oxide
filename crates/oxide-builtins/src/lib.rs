@@ -53,6 +53,7 @@ pub mod hostname;
 pub mod join;
 pub mod kill;
 pub mod let_;
+pub mod link;
 pub mod ln;
 pub mod ls;
 pub mod mkdir;

@@ -132,6 +132,7 @@ declare_builtins! {
     Join   => "join",   crate::join::run,    "join lines of two sorted files on a common field (-t -1 -2 -a -v)";
     Kill   => "kill",   crate::kill::run,    "terminate a process by PID";
     Let    => "let",    crate::let_::run,    "evaluate arithmetic, assigning variables (let x=x+1)";
+    Link   => "link",   crate::link::run,    "make a hard link to a file (no options)";
     Ln     => "ln",     crate::ln::run,      "make hard links, or symbolic links with -s (-f replace)";
     Ls     => "ls",     crate::ls::run,      "list directory contents";
     Mkdir  => "mkdir",  crate::mkdir::run,   "create directories";
