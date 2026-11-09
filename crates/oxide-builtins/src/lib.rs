@@ -57,6 +57,7 @@ pub mod let_;
 pub mod link;
 pub mod ln;
 pub mod ls;
+pub mod md5sum;
 pub mod mkdir;
 pub mod mktemp;
 pub mod mv;

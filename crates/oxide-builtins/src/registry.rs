@@ -136,6 +136,7 @@ declare_builtins! {
     Link   => "link",   crate::link::run,    "make a hard link to a file (no options)";
     Ln     => "ln",     crate::ln::run,      "make hard links, or symbolic links with -s (-f replace)";
     Ls     => "ls",     crate::ls::run,      "list directory contents";
+    Md5sum => "md5sum", crate::md5sum::run,  "print or check (-c) MD5 checksums";
     Mkdir  => "mkdir",  crate::mkdir::run,   "create directories";
     Mktemp => "mktemp", crate::mktemp::run,  "create a uniquely named temporary file (-d directory)";
     Mv     => "mv",     crate::mv::run,      "move or rename files and directories";
