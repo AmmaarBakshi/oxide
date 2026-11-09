@@ -191,22 +191,30 @@ impl Blocks {
 }
 
 /// SHA-256, as FIPS 180-4 defines it.
-struct Sha256 {
+pub(crate) struct Sha256 {
     state: [u32; 8],
     blocks: Blocks,
+}
+
+impl Sha256 {
+    /// SHA-256's compression from another initial state, which is all that
+    /// SHA-224 changes besides cutting the digest short.
+    pub(crate) fn starting_from(state: [u32; 8]) -> Self {
+        Self {
+            state,
+            blocks: Blocks::new(),
+        }
+    }
 }
 
 impl Hash for Sha256 {
     const LEN: usize = 32;
 
     fn new() -> Self {
-        Self {
-            state: [
-                0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
-                0x5be0cd19,
-            ],
-            blocks: Blocks::new(),
-        }
+        Self::starting_from([
+            0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
+            0x5be0cd19,
+        ])
     }
 
     fn update(&mut self, data: &[u8]) {
