@@ -155,6 +155,7 @@ declare_builtins! {
     Rm     => "rm",     crate::rm::run,      "remove files and directories";
     Rmdir  => "rmdir",  crate::rmdir::run,   "remove empty directories (-p parents too)";
     Seq    => "seq",    crate::seq::run,     "print a sequence of numbers";
+    Sha1sum => "sha1sum", crate::sha1sum::run, "print or check (-c) SHA-1 checksums";
     Sha256sum => "sha256sum", crate::sha256sum::run, "print or check (-c) SHA-256 checksums";
     Shuf   => "shuf",   crate::shuf::run,    "print lines in random order (-n count, -e words, -i LO-HI)";
     Sleep  => "sleep",  crate::sleep::run,   "pause for a number of seconds";

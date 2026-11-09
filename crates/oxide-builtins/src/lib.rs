@@ -76,6 +76,7 @@ pub mod rev;
 pub mod rm;
 pub mod rmdir;
 pub mod seq;
+pub mod sha1sum;
 pub mod sha256sum;
 pub mod shuf;
 pub mod sleep;

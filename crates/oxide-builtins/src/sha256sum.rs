@@ -5,27 +5,44 @@ use crate::args::parse_flags;
 use crate::{Ctx, Io};
 
 pub fn run(args: &[String], io: &mut Io<'_>, _ctx: &mut Ctx<'_>) -> i32 {
+    run_sum::<Sha256>("sha256sum", args, io)
+}
+
+/// A hash that a `*sum` builtin prints and checks. sha256sum and its
+/// siblings differ only in this; the listing, `-c` and the messages are
+/// all [`run_sum`].
+pub(crate) trait Hash {
+    /// The digest length in bytes.
+    const LEN: usize;
+    fn new() -> Self;
+    fn update(&mut self, data: &[u8]);
+    fn finish(self) -> Vec<u8>;
+}
+
+/// Runs `cmd`, a `*sum` builtin using the hash `H`: prints `HASH  NAME` for
+/// each file, or with `-c` checks a list of such lines.
+pub(crate) fn run_sum<H: Hash>(cmd: &str, args: &[String], io: &mut Io<'_>) -> i32 {
     let (flags, files) = match parse_flags(args, "c") {
         Ok(parsed) => parsed,
         Err(msg) => {
-            ewln!(io, "sha256sum: {}", msg);
-            ewln!(io, "Usage: sha256sum [-c] [file...]");
+            ewln!(io, "{}: {}", cmd, msg);
+            ewln!(io, "Usage: {} [-c] [file...]", cmd);
             return 1;
         }
     };
     if flags.contains('c') {
-        return check(io, &files);
+        return check::<H>(cmd, io, &files);
     }
-    io.each_input("sha256sum", &files, |name, input, out| {
-        writeln!(out, "{}  {}", hex(&digest(input)?), name)
+    io.each_input(cmd, &files, |name, input, out| {
+        writeln!(out, "{}  {}", hex(&digest::<H>(input)?), name)
     })
 }
 
-/// `-c`: reads `HASH  NAME` lines, as sha256sum prints them, and says
-/// whether each named file still has that hash.
-fn check(io: &mut Io<'_>, lists: &[&str]) -> i32 {
+/// `-c`: reads `HASH  NAME` lines, as `cmd` prints them, and says whether
+/// each named file still has that hash.
+fn check<H: Hash>(cmd: &str, io: &mut Io<'_>, lists: &[&str]) -> i32 {
     let mut text = String::new();
-    let status = io.each_input("sha256sum", lists, |_, input, _| {
+    let status = io.each_input(cmd, lists, |_, input, _| {
         input.read_to_string(&mut text).map(drop)
     });
     if status != 0 {
@@ -39,13 +56,15 @@ fn check(io: &mut Io<'_>, lists: &[&str]) -> i32 {
         let entry = line
             .split_once("  ")
             .or_else(|| line.split_once(" *"))
-            .filter(|(hash, _)| hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()));
+            .filter(|(hash, _)| {
+                hash.len() == 2 * H::LEN && hash.bytes().all(|b| b.is_ascii_hexdigit())
+            });
         let Some((expected, name)) = entry else {
             malformed += 1;
             continue;
         };
         checked += 1;
-        match File::open(name).and_then(|file| digest(&mut BufReader::new(file))) {
+        match File::open(name).and_then(|file| digest::<H>(&mut BufReader::new(file))) {
             Ok(actual) if hex(&actual).eq_ignore_ascii_case(expected) => wln!(io, "{}: OK", name),
             Ok(_) => {
                 failed += 1;
@@ -53,14 +72,14 @@ fn check(io: &mut Io<'_>, lists: &[&str]) -> i32 {
             }
             Err(e) => {
                 unreadable += 1;
-                ewln!(io, "sha256sum: {}: {}", name, e);
+                ewln!(io, "{}: {}: {}", cmd, name, e);
                 wln!(io, "{}: FAILED open or read", name);
             }
         }
     }
 
     if checked == 0 {
-        ewln!(io, "sha256sum: no properly formatted checksum lines found");
+        ewln!(io, "{}: no properly formatted checksum lines found", cmd);
         return 1;
     }
     for (count, one, many) in [
@@ -82,7 +101,7 @@ fn check(io: &mut Io<'_>, lists: &[&str]) -> i32 {
     ] {
         if count > 0 {
             let what = if count == 1 { one } else { many };
-            ewln!(io, "sha256sum: WARNING: {} {}", count, what);
+            ewln!(io, "{}: WARNING: {} {}", cmd, count, what);
         }
     }
     if failed + unreadable > 0 {
@@ -96,9 +115,9 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{:02x}", b)).collect()
 }
 
-/// The SHA-256 of everything in `input`, read a buffer at a time.
-fn digest(input: &mut dyn BufRead) -> io::Result<[u8; 32]> {
-    let mut hasher = Sha256::new();
+/// The hash of everything in `input`, read a buffer at a time.
+fn digest<H: Hash>(input: &mut dyn BufRead) -> io::Result<Vec<u8>> {
+    let mut hasher = H::new();
     loop {
         let buf = input.fill_buf()?;
         if buf.is_empty() {
@@ -121,28 +140,26 @@ const K: [u32; 64] = [
     0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
 ];
 
-/// SHA-256, as FIPS 180-4 defines it.
-struct Sha256 {
-    state: [u32; 8],
+/// The message buffering MD5, SHA-1 and SHA-256 share: input is cut into
+/// 64-byte blocks for a compression function, and the end is padded out to
+/// a whole block that carries the message length.
+pub(crate) struct Blocks {
     block: [u8; 64],
     filled: usize,
     total: u64,
 }
 
-impl Sha256 {
-    fn new() -> Self {
+impl Blocks {
+    pub(crate) fn new() -> Self {
         Self {
-            state: [
-                0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
-                0x5be0cd19,
-            ],
             block: [0; 64],
             filled: 0,
             total: 0,
         }
     }
 
-    fn update(&mut self, mut data: &[u8]) {
+    /// Adds `data`, passing each block it completes to `compress`.
+    pub(crate) fn update(&mut self, mut data: &[u8], mut compress: impl FnMut(&[u8; 64])) {
         self.total += data.len() as u64;
         while !data.is_empty() {
             let take = (64 - self.filled).min(data.len());
@@ -150,26 +167,57 @@ impl Sha256 {
             self.filled += take;
             data = &data[take..];
             if self.filled == 64 {
-                compress(&mut self.state, &self.block);
+                compress(&self.block);
                 self.filled = 0;
             }
         }
     }
 
-    fn finish(mut self) -> [u8; 32] {
+    /// Pads the message and compresses what is left: a 1 bit, zeros up to 8
+    /// bytes short of a block, then the length in bits, in the byte order
+    /// `length` gives it.
+    pub(crate) fn finish(
+        mut self,
+        length: fn(u64) -> [u8; 8],
+        mut compress: impl FnMut(&[u8; 64]),
+    ) {
         let bits = self.total.wrapping_mul(8);
-        // A 1 bit, zeros up to 8 bytes short of a block, then the length.
-        self.update(&[0x80]);
+        self.update(&[0x80], &mut compress);
         while self.filled != 56 {
-            self.update(&[0]);
+            self.update(&[0], &mut compress);
         }
-        self.update(&bits.to_be_bytes());
+        self.update(&length(bits), &mut compress);
+    }
+}
 
-        let mut out = [0; 32];
-        for (chunk, word) in out.chunks_exact_mut(4).zip(self.state) {
-            chunk.copy_from_slice(&word.to_be_bytes());
+/// SHA-256, as FIPS 180-4 defines it.
+struct Sha256 {
+    state: [u32; 8],
+    blocks: Blocks,
+}
+
+impl Hash for Sha256 {
+    const LEN: usize = 32;
+
+    fn new() -> Self {
+        Self {
+            state: [
+                0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
+                0x5be0cd19,
+            ],
+            blocks: Blocks::new(),
         }
-        out
+    }
+
+    fn update(&mut self, data: &[u8]) {
+        let state = &mut self.state;
+        self.blocks.update(data, |block| compress(state, block));
+    }
+
+    fn finish(self) -> Vec<u8> {
+        let Self { mut state, blocks } = self;
+        blocks.finish(u64::to_be_bytes, |block| compress(&mut state, block));
+        state.iter().flat_map(|word| word.to_be_bytes()).collect()
     }
 }
 
